@@ -6,6 +6,7 @@
   <title>天工開物：畫舫造船記</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700;900&display=swap" rel="stylesheet">
   <style>
     body {
@@ -345,88 +346,132 @@
   <!-- 拖曳中的跟隨幽靈圖示 -->
   <div id="drag-ghost" class="fixed pointer-events-none z-50 hidden -translate-x-1/2 -translate-y-1/2 drop-shadow-xl"></div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
+  <script>
     // ==========================================
-    // 0. 跨裝置 QR Code 即時雲端同步通道初始化
+    // 0. 跨裝置 QR Code 零設定點對點（PeerJS WebRTC）即時同步通道
     // ==========================================
     const urlParams = new URLSearchParams(window.location.search);
     const mobileRoomParam = urlParams.get('mobileRoom');
     const isMobileUploaderMode = Boolean(mobileRoomParam);
     const activeRoomCode = mobileRoomParam || Math.random().toString(36).substring(2, 8).toUpperCase();
+    const hostPeerId = `tkgw-boat-workshop-${activeRoomCode}`;
 
-    let cloudDb = null;
-    let cloudUser = null;
-    const cloudAppId = typeof __app_id !== 'undefined' ? __app_id : 'painted-boat-workshop';
+    let peerInstance = null;
+    let activeMobileConn = null;
+    const connectedMobiles = [];
 
-    async function initRealtimeSync() {
+    function handleIncomingSpritePayload(msg) {
+      if (!msg || !msg.type) return;
+      if (msg.type === 'UPLOAD_SPRITE' && msg.partId && msg.dataUrl) {
+        const img = new Image();
+        img.onload = () => {
+          gameState.customSprites[msg.partId] = {
+            dataUrl: msg.dataUrl,
+            img,
+            name: msg.name || '手機手繪圖',
+            updatedAt: msg.updatedAt || Date.now()
+          };
+          refreshAllSpriteViews();
+          if (!isMobileUploaderMode) {
+            const theme = getCurrentTheme();
+            showToast(`📱 收到手機即時傳來的「${theme.names[msg.partId] || msg.partId}」！`);
+          }
+        };
+        img.src = msg.dataUrl;
+      } else if (msg.type === 'REMOVE_SPRITE' && msg.partId) {
+        delete gameState.customSprites[msg.partId];
+        refreshAllSpriteViews();
+        if (!isMobileUploaderMode) {
+          const theme = getCurrentTheme();
+          showToast(`📱 手機端已還原「${theme.names[msg.partId] || msg.partId}」`);
+        }
+      }
+    }
+
+    function initRealtimeSync() {
       const statusBadge = document.getElementById('sync-status-badge');
       const mobileBadge = document.getElementById('mobile-conn-badge');
-      try {
-        if (typeof __firebase_config === 'undefined') {
-          throw new Error('無雲端設定');
-        }
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        cloudDb = getFirestore(app);
 
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-        cloudUser = auth.currentUser;
-        if (!cloudUser) return;
+      const isSandboxedPreview =
+        window.location.protocol === 'about:' ||
+        window.location.protocol === 'blob:' ||
+        window.location.origin === 'null';
 
+      if (typeof Peer === 'undefined' || isSandboxedPreview) {
         if (statusBadge) {
-          statusBadge.textContent = '● 雲端即時同步已就緒';
-          statusBadge.className = 'px-2 py-0.5 rounded bg-[#2b6e5d] text-[#fff8e7] text-[11px] font-bold';
+          statusBadge.textContent = isSandboxedPreview
+            ? '○ 預覽沙盒模式（匯出託管後啟用跨裝置連線）'
+            : '○ 本機直接上傳模式';
+          statusBadge.className = 'px-2 py-0.5 rounded bg-[#8c5a08] text-[#fff8e7] text-[11px] font-bold';
         }
-        if (mobileBadge) {
-          mobileBadge.textContent = '● 即時同步中';
-        }
+        return;
+      }
 
-        // 即時監聽同一工坊房間內的所有手繪部件更新
-        const spritesCol = collection(cloudDb, 'artifacts', cloudAppId, 'public', 'data', `boat_sprites_${activeRoomCode}`);
-        onSnapshot(spritesCol, (snapshot) => {
-          snapshot.docChanges().forEach((change) => {
-            const partId = change.doc.id;
-            const data = change.doc.data();
-            if (change.type === 'removed') {
-              delete gameState.customSprites[partId];
-              refreshAllSpriteViews();
-            } else if (data && data.dataUrl) {
-              const current = gameState.customSprites[partId];
-              if (!current || current.updatedAt !== data.updatedAt) {
-                const img = new Image();
-                img.onload = () => {
-                  gameState.customSprites[partId] = {
-                    dataUrl: data.dataUrl,
-                    img,
-                    name: data.name || '手機手繪圖',
-                    updatedAt: data.updatedAt
-                  };
-                  refreshAllSpriteViews();
-                  if (!isMobileUploaderMode) {
-                    const theme = getCurrentTheme();
-                    showToast(`📱 收到手機即時傳來的「${theme.names[partId] || partId}」！`);
-                  }
-                };
-                img.src = data.dataUrl;
-              }
+      try {
+        if (!isMobileUploaderMode) {
+          // 電腦大螢幕端：建立工坊主機頻道等待手機連線
+          peerInstance = new Peer(hostPeerId);
+          peerInstance.on('open', () => {
+            if (statusBadge) {
+              statusBadge.textContent = '● 跨裝置通道已就緒（等待手機掃碼）';
+              statusBadge.className = 'px-2 py-0.5 rounded bg-[#2b6e5d] text-[#fff8e7] text-[11px] font-bold';
             }
           });
-        }, (err) => {
-          if (statusBadge) {
-            statusBadge.textContent = '○ 本機單機模式';
-            statusBadge.className = 'px-2 py-0.5 rounded bg-[#8c5a08] text-[#fff8e7] text-[11px] font-bold';
+          peerInstance.on('connection', (conn) => {
+            connectedMobiles.push(conn);
+            if (statusBadge) {
+              statusBadge.textContent = '● 手機已連線！傳圖即時同步中';
+              statusBadge.className = 'px-2 py-0.5 rounded bg-[#15803d] text-[#fff8e7] text-[11px] font-bold';
+            }
+            showToast('📱 手機已成功連入畫舫工坊！');
+
+            conn.on('data', (data) => {
+              handleIncomingSpritePayload(data);
+            });
+            conn.on('close', () => {
+              if (statusBadge) {
+                statusBadge.textContent = '● 跨裝置通道已就緒（等待手機掃碼）';
+              }
+            });
+          });
+          peerInstance.on('error', () => {
+            if (statusBadge) {
+              statusBadge.textContent = '○ 本機直接上傳模式';
+              statusBadge.className = 'px-2 py-0.5 rounded bg-[#8c5a08] text-[#fff8e7] text-[11px] font-bold';
+            }
+          });
+        } else {
+          // 手機掃碼傳圖端：主動連線至電腦大螢幕
+          if (mobileBadge) {
+            mobileBadge.textContent = '⏳ 正在連線電腦...';
+            mobileBadge.className = 'px-2.5 py-1 rounded-full bg-[#8c5a08] text-[#fff8e7] text-[11px] font-bold';
           }
-        });
-      } catch (e) {
+          peerInstance = new Peer();
+          peerInstance.on('open', () => {
+            const conn = peerInstance.connect(hostPeerId, { reliable: true });
+            activeMobileConn = conn;
+            conn.on('open', () => {
+              if (mobileBadge) {
+                mobileBadge.textContent = '● 已連上電腦大螢幕';
+                mobileBadge.className = 'px-2.5 py-1 rounded-full bg-[#2b6e5d] text-[#fff8e7] text-[11px] font-bold';
+              }
+              showToast('✅ 已成功連上電腦大螢幕，可以開始傳圖！');
+            });
+            conn.on('close', () => {
+              if (mobileBadge) {
+                mobileBadge.textContent = '⚠️ 與電腦斷線，請重新整理';
+                mobileBadge.className = 'px-2.5 py-1 rounded-full bg-[#992216] text-[#fff8e7] text-[11px] font-bold';
+              }
+            });
+            conn.on('error', () => {
+              if (mobileBadge) {
+                mobileBadge.textContent = '⚠️ 連線失敗，請確認電腦視窗開啟中';
+                mobileBadge.className = 'px-2.5 py-1 rounded-full bg-[#992216] text-[#fff8e7] text-[11px] font-bold';
+              }
+            });
+          });
+        }
+      } catch (err) {
         if (statusBadge) {
           statusBadge.textContent = '○ 本機直接上傳模式';
           statusBadge.className = 'px-2 py-0.5 rounded bg-[#8c5a08] text-[#fff8e7] text-[11px] font-bold';
@@ -487,28 +532,25 @@
       };
       img.src = dataUrl;
 
-      if (cloudDb && cloudUser) {
-        try {
-          const docRef = doc(cloudDb, 'artifacts', cloudAppId, 'public', 'data', `boat_sprites_${activeRoomCode}`, partId);
-          await setDoc(docRef, {
-            dataUrl,
-            name: fileName,
-            updatedAt
-          });
-        } catch (err) {
-          // 若雲端寫入受限則維持本機即時顯示
-        }
+      if (activeMobileConn && activeMobileConn.open) {
+        activeMobileConn.send({
+          type: 'UPLOAD_SPRITE',
+          partId,
+          dataUrl,
+          name: fileName,
+          updatedAt
+        });
       }
     }
 
     async function removeSpriteFromCloudAndLocal(partId) {
       delete gameState.customSprites[partId];
       refreshAllSpriteViews();
-      if (cloudDb && cloudUser) {
-        try {
-          const docRef = doc(cloudDb, 'artifacts', cloudAppId, 'public', 'data', `boat_sprites_${activeRoomCode}`, partId);
-          await deleteDoc(docRef);
-        } catch (err) {}
+      if (activeMobileConn && activeMobileConn.open) {
+        activeMobileConn.send({
+          type: 'REMOVE_SPRITE',
+          partId
+        });
       }
     }
 
