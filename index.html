@@ -1826,18 +1826,174 @@
       ctx.arc(w * 0.82, h * 0.18, 28, 0, Math.PI * 2);
       ctx.fill();
 
-      // 遠山黛影與樓閣剪影
-      ctx.fillStyle = '#1e293b';
+      // 明月柔光暈
+      const moonHalo = ctx.createRadialGradient(w * 0.82, h * 0.18, 26, w * 0.82, h * 0.18, 95);
+      moonHalo.addColorStop(0, 'rgba(254, 249, 195, 0.28)');
+      moonHalo.addColorStop(1, 'rgba(254, 249, 195, 0)');
+      ctx.fillStyle = moonHalo;
       ctx.beginPath();
-      ctx.moveTo(0, waterY);
-      ctx.quadraticCurveTo(w * 0.22, waterY - 85, w * 0.48, waterY - 25);
-      ctx.quadraticCurveTo(w * 0.72, waterY - 95, w, waterY - 30);
-      ctx.lineTo(w, waterY);
-      ctx.closePath();
-      ctx.fill();
+      ctx.arc(w * 0.82, h * 0.18, 95, 0, Math.PI * 2);
+      // 岸邊十里長街：高低錯落有致的宋明江南臨水街市與疏朗燈火
+      const streetCount = Math.max(12, Math.floor(w / 72));
+      const streetStep = w / streetCount;
+      for (let i = 0; i < streetCount; i++) {
+        const bx = i * streetStep;
+        const seed = Math.sin(i * 19.31) * 43758.5453;
+        const rand = seed - Math.floor(seed);
+        const seed2 = Math.sin(i * 47.17) * 19283.123;
+        const rand2 = seed2 - Math.floor(seed2);
 
-      // 2. 江河水體漸層
-      const waterGrad = ctx.createLinearGradient(0, waterY, 0, h);
+        // 刻意營造明顯的高低錯落：矮平房(12~16px)、中鋪面(20~26px)、高茶樓酒肆(30~38px)
+        const tier = i % 3 === 1 ? 2 : (rand > 0.45 ? 1 : 0);
+        const bh = tier === 2 ? (30 + Math.floor(rand * 8)) : (tier === 1 ? (20 + Math.floor(rand * 6)) : (12 + Math.floor(rand * 5)));
+        const bw = streetStep + 3;
+
+        // 街屋主體剪影
+        ctx.fillStyle = '#0b1120';
+        ctx.fillRect(bx, waterY - bh, bw, bh);
+
+        // 古風屋頂變化：翹角雙坡頂或江南階梯馬頭牆
+        ctx.beginPath();
+        if (tier === 2) {
+          // 二層酒肆雙層飛簷
+          ctx.moveTo(bx - 5, waterY - bh);
+          ctx.quadraticCurveTo(bx + bw * 0.5, waterY - bh - 9, bx + bw + 5, waterY - bh);
+          ctx.lineTo(bx + bw, waterY - bh + 2);
+          ctx.lineTo(bx, waterY - bh + 2);
+        } else if (rand2 > 0.5) {
+          // 懸山人字瓦頂
+          ctx.moveTo(bx - 3, waterY - bh);
+          ctx.lineTo(bx + bw * 0.5, waterY - bh - 6);
+          ctx.lineTo(bx + bw + 3, waterY - bh);
+        } else {
+          // 江南錯落馬頭牆山牆
+          ctx.moveTo(bx, waterY - bh);
+          ctx.lineTo(bx, waterY - bh - 5);
+          ctx.lineTo(bx + bw * 0.35, waterY - bh - 5);
+          ctx.lineTo(bx + bw * 0.35, waterY - bh - 2);
+          ctx.lineTo(bx + bw, waterY - bh - 2);
+          ctx.lineTo(bx + bw, waterY - bh);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // 疏朗典雅的古風門窗（每棟僅留 1～2 處暖光，避免現代大樓密集格子感）
+        if (tier === 2) {
+          // 樓上雅座一扇暖光花窗 + 樓下敞開鋪門
+          ctx.fillStyle = 'rgba(253, 224, 71, 0.78)';
+          ctx.fillRect(bx + bw * 0.36, waterY - bh + 6, 8, 7);
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.58)';
+          ctx.fillRect(bx + bw * 0.32, waterY - 11, 11, 11);
+        } else if (tier === 1) {
+          // 中鋪面一扇長條透光窗或半掩鋪門
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.65)';
+          ctx.fillRect(bx + bw * 0.42, waterY - bh + 7, 7, 8);
+        } else if (rand > 0.35) {
+          // 矮屋僅留一盞微透燈光的半窗
+          ctx.fillStyle = 'rgba(253, 224, 71, 0.55)';
+          ctx.fillRect(bx + bw * 0.45, waterY - bh + 4, 5, 5);
+        }
+
+        // 沿街錯落懸掛的紅金街燈與暖光暈
+        const lx = bx + bw * (0.28 + rand2 * 0.44);
+        const ly = waterY - Math.min(bh - 4, 9);
+        const glowPulse = 0.84 + Math.sin(simState.time * 3.8 + i * 1.4) * 0.16;
+        const streetHalo = ctx.createRadialGradient(lx, ly, 1, lx, ly, 18 * glowPulse);
+        streetHalo.addColorStop(0, 'rgba(254, 240, 138, 0.92)');
+        streetHalo.addColorStop(0.45, 'rgba(249, 115, 22, 0.38)');
+        streetHalo.addColorStop(1, 'rgba(249, 115, 22, 0)');
+        ctx.fillStyle = streetHalo;
+        ctx.beginPath();
+        ctx.arc(lx, ly, 18 * glowPulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = i % 2 === 0 ? '#ef4444' : '#f59e0b';
+        ctx.beginPath();
+        ctx.arc(lx, ly, 2.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 岸邊瓊樓玉宇（左岸重簷水榭樓閣 + 右岸遠眺寶塔亭台）
+      const drawPalacePavilion = (px, py, pScale) => {
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.scale(pScale, pScale);
+
+        // 一層主殿身與暖光窗櫺
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-46, -24, 92, 24);
+        ctx.fillStyle = 'rgba(253, 224, 71, 0.72)';
+        [-32, -12, 8, 28].forEach(wx => {
+          ctx.fillRect(wx, -18, 7, 11);
+        });
+
+        // 一層飛簷
+        ctx.fillStyle = '#090d16';
+        ctx.beginPath();
+        ctx.moveTo(-62, -22);
+        ctx.quadraticCurveTo(-36, -28, -24, -36);
+        ctx.lineTo(24, -36);
+        ctx.quadraticCurveTo(36, -28, 62, -22);
+        ctx.closePath();
+        ctx.fill();
+
+        // 二層重閣與明窗
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(-28, -54, 56, 18);
+        ctx.fillStyle = 'rgba(254, 240, 138, 0.8)';
+        [-18, -3, 12].forEach(wx => {
+          ctx.fillRect(wx, -49, 6, 8);
+        });
+
+        // 頂層歇山反宇飛簷與寶頂
+        ctx.fillStyle = '#090d16';
+        ctx.beginPath();
+        ctx.moveTo(-42, -52);
+        ctx.quadraticCurveTo(-22, -58, -14, -68);
+        ctx.lineTo(14, -68);
+        ctx.quadraticCurveTo(22, -58, 42, -52);
+        ctx.closePath();
+        ctx.fill();
+
+        // 樓閣懸掛小宮燈微光
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath();
+        ctx.arc(-54, -18, 2.2, 0, Math.PI * 2);
+        ctx.arc(54, -18, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      };
+
+      // 左岸主瓊樓玉宇與右岸遠景水閣
+      drawPalacePavilion(w * 0.16, waterY, Math.min(1.05, w / 980));
+      drawPalacePavilion(w * 0.86, waterY, Math.min(0.78, w / 1280));
+
+      // 明月與兩岸瓊樓玉宇、十里長街的金色水波倒影
+      [w * 0.16, w * 0.82, w * 0.86].forEach((rx, rIdx) => {
+        const refWidth = rIdx === 1 ? 26 : 38;
+        for (let i = 0; i < 6; i++) {
+          const ry = waterY + 8 + i * 11;
+          const sway = Math.sin(simState.time * 3 + i + rIdx) * 6;
+          ctx.fillStyle = rIdx === 1 ? 'rgba(254, 249, 195, 0.16)' : 'rgba(251, 191, 36, 0.14)';
+          ctx.fillRect(rx - refWidth / 2 + sway, ry, refWidth * (1 - i * 0.1), 2.5);
+        }
+      });
+
+      // 十里長街萬家燈火在江面上的波光倒影
+      const refCols = Math.max(22, Math.floor(w / 36));
+      for (let i = 0; i < refCols; i++) {
+        const rx = (i + 0.5) * (w / refCols);
+        for (let row = 0; row < 4; row++) {
+          const ry = waterY + 6 + row * 9;
+          const sway = Math.sin(simState.time * 3.5 + i * 0.9 + row) * 5;
+          const rw = (12 - row * 2) * (0.7 + ((i * 7) % 5) * 0.12);
+          ctx.fillStyle = row === 0
+            ? 'rgba(253, 224, 71, 0.28)'
+            : 'rgba(251, 146, 60, 0.16)';
+          ctx.fillRect(rx - rw / 2 + sway, ry, rw, 2);
+        }
+      }
       // 2.5 更新水上畫舫艦隊位置（第一艘在最右邊，最多 3 艘停泊江面，超過 3 艘時最舊的往右漂走）
       const slotLayouts = [
         { targetX: w * 0.78, yOffset: -14, scale: 0.64 },
