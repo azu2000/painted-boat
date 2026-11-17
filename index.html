@@ -77,6 +77,9 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+        <button id="btn-mobile-qr" class="px-2.5 py-1.5 rounded-lg bg-[#992216] hover:bg-[#b8332a] border border-[#fde047]/60 text-[#fff8e7] text-xs font-bold shadow cursor-pointer transition">
+          📱 手機造船 QR
+        </button>
         <button id="btn-palette" class="px-2.5 py-1.5 rounded-lg bg-[#6b4c35] hover:bg-[#825d42] border border-[#bfa475]/60 text-xs font-bold shadow cursor-pointer transition">
           🎨 畫舫配色
         </button>
@@ -325,29 +328,71 @@
   </div>
 
   <!-- 手機掃碼後專屬遠端傳圖介面（透過 URL ?mobileRoom=XXXX 自動開啟） -->
-  <div id="mobile-uploader-view" class="fixed inset-0 bg-[#fbf4e4] z-50 hidden flex-col overflow-y-auto text-[#3a2a18]">
-    <header class="bg-gradient-to-r from-[#3e2b18] via-[#543a21] to-[#3e2b18] text-[#f8eedb] px-4 py-3 border-b-2 border-[#8c6d46] shrink-0">
+  <div id="mobile-uploader-view" class="fixed inset-0 bg-[#2b1d10] z-50 hidden flex-col overflow-hidden text-[#f8eedb]">
+    <header class="bg-gradient-to-r from-[#3e2b18] via-[#543a21] to-[#3e2b18] text-[#f8eedb] px-3 py-2 border-b-2 border-[#8c6d46] shrink-0">
       <div class="flex items-center justify-between gap-2">
         <div>
-          <h1 class="text-base font-black text-[#f9e7be]">🏮 天工開物・手機即時傳圖端</h1>
-          <p class="text-[11px] text-[#d9c39e]">已連線工坊通道：<span id="mobile-room-label" class="font-mono font-bold text-[#fde047]">----</span></p>
+          <h1 class="text-sm sm:text-base font-black text-[#f9e7be]">🏮 手機造船台・直投大螢幕</h1>
+          <p class="text-[11px] text-[#d9c39e]">通道：<span id="mobile-room-label" class="font-mono font-bold text-[#fde047]">----</span> <span id="mobile-conn-badge" class="ml-1 px-2 py-0.5 rounded-full bg-[#2b6e5d] text-[#fff8e7] text-[10px] font-bold">● 連線中</span></p>
         </div>
-        <div class="flex items-center gap-2">
-          <span id="mobile-conn-badge" class="px-2.5 py-1 rounded-full bg-[#2b6e5d] text-[#fff8e7] text-[11px] font-bold">● 已連線</span>
-          <button id="btn-exit-mobile-sim" type="button" class="hidden px-2.5 py-1 rounded-lg bg-[#8c5a08] text-[#fff8e7] text-xs font-bold cursor-pointer">
+        <div class="flex items-center gap-1.5">
+          <button id="btn-mobile-palette" type="button" class="px-2.5 py-1.5 rounded-lg bg-[#6b4c35] border border-[#bfa475]/60 text-xs font-bold cursor-pointer">
+            🎨 配色
+          </button>
+          <button id="btn-mobile-sprites-tab" type="button" class="px-2.5 py-1.5 rounded-lg bg-[#6b4c35] border border-[#bfa475]/60 text-xs font-bold cursor-pointer">
+            🖼️ 傳圖
+          </button>
+          <button id="btn-exit-mobile-sim" type="button" class="hidden px-2.5 py-1.5 rounded-lg bg-[#8c5a08] text-[#fff8e7] text-xs font-bold cursor-pointer">
             返回大螢幕
           </button>
         </div>
       </div>
     </header>
 
-    <div class="p-4 max-w-md mx-auto w-full space-y-3 flex-1">
-      <div class="bg-[#f2e6cf] border border-[#d6c198] rounded-xl p-3 text-xs text-[#5c4326] leading-relaxed">
-        請選擇下方任一畫舫部件，挑選手機相簿中的手繪圖檔（或直接拍照），系統將自動壓縮並**即時推送至大螢幕藍圖**！
+    <!-- 手機觸控組裝主畫面 -->
+    <div id="mobile-build-panel" class="flex-1 flex flex-col justify-between p-2 gap-2 min-h-0">
+      <div class="flex-1 blueprint-bg blueprint-frame rounded-xl relative overflow-hidden flex items-center justify-center min-h-0">
+        <div class="absolute top-2 left-2.5 flex items-center gap-1.5 pointer-events-none z-10">
+          <span class="px-1.5 py-0.5 border border-[#992216] text-[#992216] text-[10px] font-black bg-[#fbf4e4]/85 rounded">手指拖曳組裝</span>
+          <span id="mobile-assembled-count" class="text-[11px] font-bold text-[#6b5336] bg-[#fbf4e4]/85 px-2 py-0.5 rounded-full border border-[#bfa475]">已裝：0 / 6</span>
+        </div>
+        <button id="btn-mobile-reset" type="button" class="absolute top-2 right-2.5 z-10 px-2 py-0.5 rounded bg-[#7c2d12]/90 text-[#fff8e7] text-[11px] font-bold cursor-pointer">
+          ↺ 清空
+        </button>
+        <svg id="mobile-blueprint-svg" viewBox="0 0 800 420" class="w-full h-full max-h-full">
+          <defs>
+            <radialGradient id="mobile-lantern-halo" cx="50%" cy="48%" r="50%">
+              <stop offset="0%" stop-color="#fef08a" stop-opacity="0.85" />
+              <stop offset="45%" stop-color="#f59e0b" stop-opacity="0.35" />
+              <stop offset="100%" stop-color="#f59e0b" stop-opacity="0" />
+            </radialGradient>
+          </defs>
+          <rect x="14" y="14" width="772" height="392" rx="10" fill="none" stroke="#9c7c54" stroke-width="2" />
+          <line x1="60" y1="336" x2="740" y2="336" stroke="#2b6e5d" stroke-width="1.5" stroke-dasharray="8 6" opacity="0.45" />
+          <g id="mobile-free-placed-layer"></g>
+        </svg>
       </div>
-      <div id="mobile-parts-list" class="space-y-2.5">
-        <!-- 由 JS 動態生成 7 個手機端傳圖卡片 -->
+
+      <!-- 手機底部物料庫 -->
+      <div class="bg-[#3e2b18]/95 border-2 border-[#8c6d46] rounded-xl p-1.5 shrink-0">
+        <div id="mobile-tray-grid" class="grid grid-cols-4 gap-1.5"></div>
       </div>
+
+      <!-- 手機下水投映大螢幕按鈕 -->
+      <button id="btn-mobile-cast-boat" type="button" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#2b6e5d] to-[#1f5245] border-2 border-[#86efac]/70 text-[#fff8e7] font-black text-sm shadow-lg active:scale-98 cursor-pointer shrink-0">
+        ⛵ 完成組裝・下水投映到大螢幕！
+      </button>
+    </div>
+
+    <!-- 手機端傳圖抽屜（點擊頂部「🖼️ 傳圖」切換） -->
+    <div id="mobile-upload-drawer" class="hidden flex-1 overflow-y-auto p-3 bg-[#fbf4e4] text-[#3a2a18] space-y-2.5">
+      <div class="flex items-center justify-between bg-[#f2e6cf] border border-[#d6c198] rounded-xl p-2.5 text-xs">
+        <span>上傳手繪部件會即時同步至手機與大螢幕藍圖</span>
+        <button id="btn-back-mobile-build" type="button" class="px-3 py-1 rounded-lg bg-[#2b6e5d] text-[#fff8e7] font-bold cursor-pointer">
+          ← 回造船台
+        </button>
+      </div>
+      <div id="mobile-parts-list" class="space-y-2"></div>
     </div>
   </div>
 
@@ -375,6 +420,11 @@
 
     function handleIncomingSpritePayload(msg) {
       if (!msg || !msg.type) return;
+      if (msg.type === 'LAUNCH_CAST_BOAT' && msg.snapshot && !isMobileUploaderMode) {
+        // 接收手機端完成組裝並投映過來的畫舫，直接在大螢幕江南河道下水！
+        launchRemoteBoatOnBigScreen(msg.snapshot);
+        return;
+      }
       if (msg.type === 'UPLOAD_SPRITE' && msg.partId && msg.dataUrl) {
         const img = new Image();
         img.onload = () => {
@@ -495,6 +545,8 @@
     function refreshAllSpriteViews() {
       if (isMobileUploaderMode) {
         renderMobilePartsList();
+        renderMobileBuildCanvas();
+        renderMobileBuildTray();
       } else {
         if (!document.getElementById('sprites-modal').classList.contains('hidden')) {
           renderSpritesControls();
@@ -1441,8 +1493,10 @@
       }
     }
 
-    function startRiverSimulation() {
-      const evalRes = evaluateBoatBuild();
+    function startRiverSimulation(remoteSnapshot = null) {
+      const evalRes = remoteSnapshot
+        ? { success: true, hasBulkheadInHull: true, errors: [] }
+        : evaluateBoatBuild();
       gameState.phase = 'river';
 
       document.getElementById('dock-stage').classList.add('hidden');
@@ -1455,23 +1509,25 @@
 
       pillBox.classList.remove('hidden');
       nextBtn.classList.add('hidden');
-      pill.textContent = '⛵ 吉時已到，畫舫順滑道入水...';
+      pill.textContent = remoteSnapshot
+        ? '📱 收到手機觀眾打造的新畫舫，正在滑入江南河道！'
+        : '⛵ 吉時已到，畫舫順滑道入水...';
 
       const canvas = document.getElementById('river-canvas');
       const rect = canvas.parentElement.getBoundingClientRect();
       canvas.width = rect.width;
       canvas.height = rect.height;
 
-      const snapshot = cloneCurrentBoatSnapshot();
+      const snapshot = remoteSnapshot || cloneCurrentBoatSnapshot();
       snapshot.isSuccess = evalRes.success;
       snapshot.x = canvas.width * 0.14;
       snapshot.y = canvas.height * 0.42;
 
       simState.time = 0;
-      simState.boatX = snapshot.x;
-      simState.boatY = snapshot.y;
-      simState.vy = 2.0;
-      simState.angle = 0.05;
+      simState.boatX = canvas.width * 0.14;
+      simState.boatY = canvas.height * 0.42;
+      simState.vy = 0;
+      simState.angle = 0.24;
       simState.splashed = false;
       simState.broken = false;
       simState.modalShown = false;
@@ -1482,16 +1538,271 @@
       simState.debris = [];
 
       if (simAnimId) cancelAnimationFrame(simAnimId);
-      let lastTime = performance.now();
+      let lastTs = performance.now();
 
-      function loop(now) {
-        const dt = Math.min(0.05, (now - lastTime) / 1000);
-        lastTime = now;
+      const loop = (now) => {
+        const dt = Math.min(0.05, (now - lastTs) / 1000);
+        lastTs = now;
         updateAndDrawRiver(canvas, dt);
         simAnimId = requestAnimationFrame(loop);
-      }
+      };
       simAnimId = requestAnimationFrame(loop);
     }
+
+    function launchRemoteBoatOnBigScreen(rawSnapshot) {
+      // 重建圖片物件以供 Canvas 繪製
+      const hydratedSprites = {};
+      if (rawSnapshot.customSprites) {
+        Object.keys(rawSnapshot.customSprites).forEach(pid => {
+          const entry = rawSnapshot.customSprites[pid];
+          if (entry && entry.dataUrl) {
+            const img = new Image();
+            img.src = entry.dataUrl;
+            hydratedSprites[pid] = { ...entry, img };
+          }
+        });
+      }
+      const snapshot = {
+        id: Date.now() + Math.random(),
+        theme: rawSnapshot.theme || getCurrentTheme(),
+        placedItems: rawSnapshot.placedItems || {},
+        customSprites: hydratedSprites,
+        isSuccess: true,
+        phaseOffset: Math.random() * Math.PI * 2,
+        slotIndex: 0,
+        x: 0,
+        y: 0,
+        leaving: false,
+        scale: 0.64
+      };
+
+      // 關閉大螢幕可能開啟的彈窗，直接切換到江南河道欣賞新船入水
+      document.getElementById('sprites-modal').classList.add('hidden');
+      document.getElementById('palette-modal').classList.add('hidden');
+      document.getElementById('audio-modal').classList.add('hidden');
+      startRiverSimulation(snapshot);
+    }
+    document.getElementById('btn-mobile-qr').addEventListener('click', () => {
+      document.getElementById('btn-custom-sprites').click();
+    });
+
+    document.getElementById('btn-simulate-mobile').addEventListener('click', () => {
+      document.getElementById('sprites-modal').classList.add('hidden');
+      document.getElementById('mobile-room-label').textContent = activeRoomCode;
+      document.getElementById('btn-exit-mobile-sim').classList.remove('hidden');
+      const mobileView = document.getElementById('mobile-uploader-view');
+      mobileView.classList.remove('hidden');
+      mobileView.classList.add('flex');
+      renderMobileBuildCanvas();
+      renderMobileBuildTray();
+      renderMobilePartsList();
+    });
+
+    document.getElementById('btn-exit-mobile-sim').addEventListener('click', () => {
+      const mobileView = document.getElementById('mobile-uploader-view');
+      mobileView.classList.add('hidden');
+      mobileView.classList.remove('flex');
+      renderBlueprintCanvas();
+      renderPartsTray();
+    });
+
+    // ==========================================
+    // 8.6 手機掃碼端觸控組裝與一鍵下水投映大螢幕邏輯
+    // ==========================================
+    function getActiveMobileSvg() {
+      return document.getElementById('mobile-blueprint-svg');
+    }
+
+    function clientToMobileSvgCoords(clientX, clientY) {
+      const svg = getActiveMobileSvg();
+      if (!svg) return null;
+      const rect = svg.getBoundingClientRect();
+      if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+        return null;
+      }
+      const scale = Math.min(rect.width / 800, rect.height / 420);
+      const renderedW = 800 * scale;
+      const renderedH = 420 * scale;
+      const offsetX = rect.left + (rect.width - renderedW) / 2;
+      const offsetY = rect.top + (rect.height - renderedH) / 2;
+      return {
+        x: (clientX - offsetX) / scale,
+        y: (clientY - offsetY) / scale,
+        scale
+      };
+    }
+
+    function startMobileDragPart(e, partId, fromCanvas) {
+      e.preventDefault();
+      sound.init();
+      gameState.draggingPartId = partId;
+      if (fromCanvas) {
+        delete gameState.placedItems[partId];
+        renderMobileBuildCanvas();
+      }
+      const theme = getCurrentTheme();
+      const vb = PART_BASE_VIEWBOX[partId];
+      const svg = getActiveMobileSvg();
+      const rect = svg.getBoundingClientRect();
+      const svgScale = Math.min(rect.width / 800, rect.height / 420) || 0.45;
+
+      dragGhost.innerHTML = `
+        <svg width="${vb.w * svgScale}" height="${vb.h * svgScale}" viewBox="0 0 ${vb.w} ${vb.h}" class="overflow-visible">
+          ${getPartSVGInner(partId, theme)}
+        </svg>
+      `;
+      dragGhost.style.left = `${e.clientX}px`;
+      dragGhost.style.top = `${e.clientY}px`;
+      dragGhost.classList.remove('hidden');
+
+      const onMobMove = (ev) => {
+        dragGhost.style.left = `${ev.clientX}px`;
+        dragGhost.style.top = `${ev.clientY}px`;
+      };
+      const onMobUp = (ev) => {
+        window.removeEventListener('pointermove', onMobMove);
+        window.removeEventListener('pointerup', onMobUp);
+        dragGhost.classList.add('hidden');
+        const pid = gameState.draggingPartId;
+        gameState.draggingPartId = null;
+        if (!pid) return;
+        const pt = clientToMobileSvgCoords(ev.clientX, ev.clientY);
+        if (pt) {
+          gameState.placedItems[pid] = {
+            cx: Math.max(45, Math.min(755, pt.x)),
+            cy: Math.max(35, Math.min(365, pt.y))
+          };
+          sound.playWoodSnap();
+        }
+        renderMobileBuildCanvas();
+        renderMobileBuildTray();
+      };
+      window.addEventListener('pointermove', onMobMove);
+      window.addEventListener('pointerup', onMobUp);
+    }
+
+    function renderMobileBuildCanvas() {
+      const layer = document.getElementById('mobile-free-placed-layer');
+      if (!layer) return;
+      const theme = getCurrentTheme();
+      layer.innerHTML = '';
+
+      const renderOrder = ['hull', 'bulkhead', 'rudder', 'decoy', 'cabin', 'roof', 'lantern'];
+      renderOrder.forEach(partId => {
+        const pos = gameState.placedItems[partId];
+        if (!pos) return;
+        const vb = PART_BASE_VIEWBOX[partId];
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'placed-item-group');
+        g.setAttribute('transform', `translate(${pos.cx - vb.w / 2}, ${pos.cy - vb.h / 2})`);
+        g.innerHTML = getPartSVGInner(partId, theme);
+        g.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          startMobileDragPart(e, partId, true);
+        });
+        layer.appendChild(g);
+      });
+
+      const countEl = document.getElementById('mobile-assembled-count');
+      if (countEl) countEl.textContent = `已裝：${Object.keys(gameState.placedItems).length} / 6`;
+    }
+
+    function renderMobileBuildTray() {
+      const tray = document.getElementById('mobile-tray-grid');
+      if (!tray) return;
+      const theme = getCurrentTheme();
+      tray.innerHTML = '';
+
+      gameState.shuffledPartIds.forEach(partId => {
+        const isPlaced = Boolean(gameState.placedItems[partId]);
+        const vb = PART_BASE_VIEWBOX[partId];
+        const card = document.createElement('div');
+        card.className = `part-card ${isPlaced ? 'is-placed' : ''} bg-[#fbf5e6] border border-[#bfa475] rounded-lg p-1 flex flex-col items-center justify-between cursor-grab select-none`;
+        card.innerHTML = `
+          <div class="w-full h-9 flex items-center justify-center pointer-events-none">
+            <svg viewBox="0 0 ${vb.w} ${vb.h}" class="max-w-full max-h-full overflow-visible">
+              ${getPartSVGInner(partId, theme)}
+            </svg>
+          </div>
+          <span class="text-[10px] font-bold text-[#4a3723] truncate w-full text-center pointer-events-none">${theme.names[partId]}</span>
+        `;
+        card.addEventListener('pointerdown', (e) => startMobileDragPart(e, partId, false));
+        tray.appendChild(card);
+      });
+    }
+
+    document.getElementById('btn-mobile-reset').addEventListener('click', () => {
+      gameState.placedItems = {};
+      shuffleCurrentParts();
+      renderMobileBuildCanvas();
+      renderMobileBuildTray();
+      showToast('已清空手機藍圖');
+    });
+
+    document.getElementById('btn-mobile-palette').addEventListener('click', () => {
+      renderPaletteControls();
+      document.getElementById('palette-modal').classList.remove('hidden');
+    });
+
+    document.getElementById('btn-mobile-sprites-tab').addEventListener('click', () => {
+      document.getElementById('mobile-build-panel').classList.add('hidden');
+      document.getElementById('mobile-upload-drawer').classList.remove('hidden');
+      renderMobilePartsList();
+    });
+
+    document.getElementById('btn-back-mobile-build').addEventListener('click', () => {
+      document.getElementById('mobile-upload-drawer').classList.add('hidden');
+      document.getElementById('mobile-build-panel').classList.remove('hidden');
+      renderMobileBuildCanvas();
+      renderMobileBuildTray();
+    });
+
+    document.getElementById('btn-mobile-cast-boat').addEventListener('click', () => {
+      const evalRes = evaluateBoatBuild();
+      if (!evalRes.success) {
+        // 手機端先做工部結構檢核，提示缺少的部件或水密隔艙位置
+        showToast(evalRes.errors[0].replace(/^•\s*/, ''));
+        return;
+      }
+
+      // 打包畫舫資料（含配色、部件位置與自訂貼圖 DataURL）
+      const serializedSprites = {};
+      Object.keys(gameState.customSprites).forEach(k => {
+        serializedSprites[k] = {
+          dataUrl: gameState.customSprites[k].dataUrl,
+          name: gameState.customSprites[k].name
+        };
+      });
+
+      const payloadSnapshot = {
+        theme: getCurrentTheme(),
+        placedItems: { ...gameState.placedItems },
+        customSprites: serializedSprites
+      };
+
+      if (activeMobileConn && activeMobileConn.open) {
+        activeMobileConn.send({
+          type: 'LAUNCH_CAST_BOAT',
+          snapshot: payloadSnapshot
+        });
+        showToast('🎉 畫舫已成功發射投映至大螢幕江面！');
+      } else {
+        // 若為同機模擬測試模式，直接關閉手機模擬層並在當前大螢幕江面下水！
+        const mobileView = document.getElementById('mobile-uploader-view');
+        mobileView.classList.add('hidden');
+        mobileView.classList.remove('flex');
+        launchRemoteBoatOnBigScreen(payloadSnapshot);
+        showToast('🎉 已將手機打造的畫舫投映到江面！');
+      }
+
+      // 自動換下一套畫舫主題並清空手機藍圖，方便同一位或下一位觀眾繼續造下一艘船
+      gameState.themeIndex = (gameState.themeIndex + 1) % LEVEL_THEMES.length;
+      gameState.customColors = {};
+      gameState.placedItems = {};
+      shuffleCurrentParts();
+      renderMobileBuildCanvas();
+      renderMobileBuildTray();
+    });
 
     function updateAndDrawRiver(canvas, dt) {
       const ctx = canvas.getContext('2d');
@@ -1501,61 +1812,57 @@
       const theme = getCurrentTheme();
 
       simState.time += dt;
+      ctx.clearRect(0, 0, w, h);
 
-      // 1. 暮色江南天空與遠山
+      // 1. 江南夜色天幕漸層與明月
       const skyGrad = ctx.createLinearGradient(0, 0, 0, waterY);
-      skyGrad.addColorStop(0, '#142236');
-      skyGrad.addColorStop(0.6, '#2c425e');
-      skyGrad.addColorStop(1, '#c97b53');
+      skyGrad.addColorStop(0, '#0f172a');
+      skyGrad.addColorStop(0.55, '#1e293b');
+      skyGrad.addColorStop(1, '#334155');
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, w, waterY);
 
-      // 明月
-      ctx.fillStyle = '#fef3c7';
+      ctx.fillStyle = '#fef9c3';
       ctx.beginPath();
-      ctx.arc(w * 0.8, h * 0.18, 28, 0, Math.PI * 2);
+      ctx.arc(w * 0.82, h * 0.18, 28, 0, Math.PI * 2);
       ctx.fill();
 
-      // 遠山剪影
-      ctx.fillStyle = '#1d2d42';
+      // 遠山黛影與樓閣剪影
+      ctx.fillStyle = '#1e293b';
       ctx.beginPath();
       ctx.moveTo(0, waterY);
-      ctx.lineTo(0, waterY - 75);
-      ctx.quadraticCurveTo(w * 0.25, waterY - 135, w * 0.52, waterY - 65);
-      ctx.quadraticCurveTo(w * 0.78, waterY - 125, w, waterY - 70);
+      ctx.quadraticCurveTo(w * 0.22, waterY - 85, w * 0.48, waterY - 25);
+      ctx.quadraticCurveTo(w * 0.72, waterY - 95, w, waterY - 30);
       ctx.lineTo(w, waterY);
       ctx.closePath();
       ctx.fill();
 
-      // 繪製江水底色（在畫舫之前先畫上半部江面，讓三艘船按遠近景深自然停泊在水面上）
+      // 2. 江河水體漸層
       const waterGrad = ctx.createLinearGradient(0, waterY, 0, h);
-      waterGrad.addColorStop(0, 'rgba(26, 75, 92, 0.94)');
-      waterGrad.addColorStop(1, '#0d2633');
+      waterGrad.addColorStop(0, '#0e7490');
+      waterGrad.addColorStop(0.5, '#155e75');
+      waterGrad.addColorStop(1, '#083344');
       ctx.fillStyle = waterGrad;
       ctx.fillRect(0, waterY, w, h - waterY);
 
-      // 2. 更新並繪製既有的水上畫舫艦隊（最多 3 艘駐留，第 4 艘加入時最舊的依序往右漂走）
-      // 調整吃水高度，讓每艘畫舫的龍骨都穩穩浮在水波線上，絕不看起來像下沉
-      const slotConfigs = [
-        { xRatio: 0.74, yOffset: -20, scale: 0.50 }, // 第 1 艘（遠景右側，貼近遠方水岸線）
-        { xRatio: 0.48, yOffset: -6,  scale: 0.58 }, // 第 2 艘（中景中央，平穩浮於江心）
-        { xRatio: 0.22, yOffset: 10,  scale: 0.65 }  // 第 3 艘（近景左側，最靠近前景）
+      // 2.5 更新水上畫舫艦隊位置（最多 3 艘停泊江面，超過 3 艘時最舊的往右漂走）
+      const slotLayouts = [
+        { targetX: w * 0.30, yOffset: -20, scale: 0.60 },
+        { targetX: w * 0.56, yOffset: -6,  scale: 0.66 },
+        { targetX: w * 0.80, yOffset: 10,  scale: 0.72 }
       ];
-
       gameState.riverFleet.forEach(boat => {
         if (boat.leaving) {
-          // 超過 3 艘時，最舊的畫舫順水向畫面右側平穩漂走
           boat.x += 135 * dt;
-          boat.y += Math.sin(simState.time * 2.5 + boat.phaseOffset) * 0.25;
         } else {
-          const cfg = slotConfigs[boat.slotIndex] || slotConfigs[2];
-          const targetX = w * cfg.xRatio;
-          const targetY = waterY + cfg.yOffset;
-          boat.x += (targetX - boat.x) * Math.min(1, 2.8 * dt);
-          boat.y += (targetY - boat.y) * Math.min(1, 2.8 * dt);
-          boat.scale += (cfg.scale - boat.scale) * Math.min(1, 2.8 * dt);
+          const layout = slotLayouts[boat.slotIndex] || slotLayouts[0];
+          const targetY = waterY + layout.yOffset;
+          boat.x += (layout.targetX - boat.x) * Math.min(1, dt * 2.2);
+          boat.y += (targetY - boat.y) * Math.min(1, dt * 2.5);
+          boat.scale += (layout.scale - boat.scale) * Math.min(1, dt * 2.5);
         }
       });
+
       // 移除已經完全漂出畫面右側的舊畫舫
       gameState.riverFleet = gameState.riverFleet.filter(b => !b.leaving || b.x < w + 320);
 
@@ -2864,15 +3171,17 @@
     // 初始化遊戲畫面
     window.onload = () => {
       initRealtimeSync();
+      shuffleCurrentParts();
       if (isMobileUploaderMode) {
         document.getElementById('mobile-room-label').textContent = activeRoomCode;
         const mobileView = document.getElementById('mobile-uploader-view');
         mobileView.classList.remove('hidden');
         mobileView.classList.add('flex');
+        renderMobileBuildCanvas();
+        renderMobileBuildTray();
         renderMobilePartsList();
         return;
       }
-      shuffleCurrentParts();
       renderBlueprintCanvas();
       renderPartsTray();
     };
