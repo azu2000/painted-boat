@@ -1839,37 +1839,37 @@
 
       // 2. 江河水體漸層
       const waterGrad = ctx.createLinearGradient(0, waterY, 0, h);
-      waterGrad.addColorStop(0, '#0e7490');
-      waterGrad.addColorStop(0.5, '#155e75');
-      waterGrad.addColorStop(1, '#083344');
-      ctx.fillStyle = waterGrad;
-      ctx.fillRect(0, waterY, w, h - waterY);
-
-      // 2.5 更新水上畫舫艦隊位置（最多 3 艘停泊江面，超過 3 艘時最舊的往右漂走）
+      // 2.5 更新水上畫舫艦隊位置（第一艘在最右邊，最多 3 艘停泊江面，超過 3 艘時最舊的往右漂走）
       const slotLayouts = [
-        { targetX: w * 0.30, yOffset: -20, scale: 0.60 },
-        { targetX: w * 0.56, yOffset: -6,  scale: 0.66 },
-        { targetX: w * 0.80, yOffset: 10,  scale: 0.72 }
+        { targetX: w * 0.78, yOffset: -14, scale: 0.64 },
+        { targetX: w * 0.54, yOffset: -4,  scale: 0.65 },
+        { targetX: w * 0.30, yOffset: 6,   scale: 0.66 }
       ];
+      const cruiseSpeed = 85; // 勻速緩慢滑行速度（像素/秒），避免突然加速
       gameState.riverFleet.forEach(boat => {
         if (boat.leaving) {
-          boat.x += 135 * dt;
+          boat.x += cruiseSpeed * dt;
         } else {
           const layout = slotLayouts[boat.slotIndex] || slotLayouts[0];
           const targetY = waterY + layout.yOffset;
-          boat.x += (layout.targetX - boat.x) * Math.min(1, dt * 2.2);
-          boat.y += (targetY - boat.y) * Math.min(1, dt * 2.5);
-          boat.scale += (layout.scale - boat.scale) * Math.min(1, dt * 2.5);
+          const dx = layout.targetX - boat.x;
+          const dy = targetY - boat.y;
+          const stepX = cruiseSpeed * dt;
+          const stepY = 28 * dt;
+
+          boat.x = Math.abs(dx) <= stepX ? layout.targetX : boat.x + Math.sign(dx) * stepX;
+          boat.y = Math.abs(dy) <= stepY ? targetY : boat.y + Math.sign(dy) * stepY;
+          boat.scale += (layout.scale - boat.scale) * Math.min(1, dt * 1.5);
         }
       });
 
       // 移除已經完全漂出畫面右側的舊畫舫
       gameState.riverFleet = gameState.riverFleet.filter(b => !b.leaving || b.x < w + 320);
 
-      // 3. 當前新下水畫舫的物理運動更新
+      // 3. 當前新下水畫舫的物理運動更新（勻速平穩滑入水中）
       if (!simState.splashed) {
-        simState.boatX += 95 * dt;
-        simState.boatY += 135 * dt;
+        simState.boatX += 75 * dt;
+        simState.boatY += 95 * dt;
         if (simState.boatY >= waterY - 14) {
           simState.boatY = waterY - 14;
           simState.angle = 0;
