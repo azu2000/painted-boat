@@ -116,6 +116,14 @@
       </div>
 
       <svg id="blueprint-svg" viewBox="0 0 800 420" class="w-full h-full max-h-full">
+        <defs>
+          <!-- 宮燈暖光散開濾鏡與漸層 -->
+          <radialGradient id="lantern-halo-grad" cx="50%" cy="48%" r="50%">
+            <stop offset="0%" stop-color="#fef08a" stop-opacity="0.85" />
+            <stop offset="45%" stop-color="#f59e0b" stop-opacity="0.35" />
+            <stop offset="100%" stop-color="#f59e0b" stop-opacity="0" />
+          </radialGradient>
+        </defs>
         <!-- 宣紙外框與四角回紋裝飾 -->
         <rect x="14" y="14" width="772" height="392" rx="10" fill="none" stroke="#9c7c54" stroke-width="2" />
         <rect x="20" y="20" width="760" height="380" rx="6" fill="none" stroke="#bfa475" stroke-width="1" stroke-dasharray="6 4" />
@@ -144,9 +152,14 @@
       <span id="river-status-pill">⛵ 吉時已到，畫舫順滑道入水...</span>
     </div>
 
-    <button id="btn-back-dock-top" class="absolute top-3 right-3 px-3.5 py-1.5 rounded-xl bg-[#4a3723]/90 hover:bg-[#61482e] border border-[#e6b85c] text-[#fff8e7] text-xs font-bold shadow-lg cursor-pointer z-10">
-      ← 返回船塢
-    </button>
+    <div class="absolute top-3 right-3 flex items-center gap-2 z-10">
+      <button id="btn-next-boat-top" class="hidden px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#2b6e5d] to-[#1f5245] hover:from-[#348570] hover:to-[#266353] border border-[#86efac]/70 text-[#fff8e7] text-xs font-bold shadow-lg cursor-pointer">
+        + 繼續打造新畫舫
+      </button>
+      <button id="btn-back-dock-top" class="px-3.5 py-1.5 rounded-xl bg-[#4a3723]/90 hover:bg-[#61482e] border border-[#e6b85c] text-[#fff8e7] text-xs font-bold shadow-lg cursor-pointer">
+        ← 返回船塢
+      </button>
+    </div>
   </section>
 
   <!-- 吉凶榜文結算彈窗 -->
@@ -980,6 +993,9 @@
       if (partId === 'lantern') {
         return `
           <g>
+            <!-- 燭光暖暈散開效果 -->
+            <circle cx="44" cy="52" r="56" fill="url(#lantern-halo-grad)" />
+            <circle cx="44" cy="52" r="24" fill="#fef08a" opacity="0.32" />
             <!-- 挑簷掛桿 -->
             <line x1="6" y1="10" x2="68" y2="10" stroke="${theme.lanternTrim}" stroke-width="3" stroke-linecap="round" />
             <!-- 絲綢垂幔 -->
@@ -987,6 +1003,8 @@
             <!-- 六角木雕宮燈冠與燈身 -->
             <polygon points="24,28 32,20 56,20 64,28" fill="${theme.lanternTrim}" />
             <polygon points="26,28 62,28 66,52 60,74 28,74 22,52" fill="${theme.lanternMain}" stroke="${theme.lanternTrim}" stroke-width="2" />
+            <!-- 燈心暖亮內核 -->
+            <ellipse cx="44" cy="51" rx="11" ry="15" fill="#fef9c3" opacity="0.55" />
             <!-- 燈格與三縷流蘇 -->
             <path d="M 36,28 L 34,74 M 52,28 L 54,74 M 23,51 H 65" stroke="${theme.lanternTrim}" stroke-width="1.4" />
             <path d="M 38,79 L 36,104 M 44,79 L 44,107 M 50,79 L 52,104" stroke="${theme.lanternTrim}" stroke-width="1.6" stroke-linecap="round" />
@@ -1068,7 +1086,8 @@
       customSprites: {}, // { [partId]: { dataUrl, img, name } }
       placedItems: {},
       shuffledPartIds: ['hull', 'bulkhead', 'cabin', 'roof', 'lantern', 'rudder', 'decoy'],
-      draggingPartId: null
+      draggingPartId: null,
+      riverFleet: [] // 水上成功航行的畫舫艦隊（最多保留 3 艘，超過依序漂走）
     };
 
     function shuffleCurrentParts() {
@@ -1104,39 +1123,87 @@
     }
 
     // ==========================================
-    // 4. 渲染物料庫與全自由藍圖畫布
+    // 7. 江南河道下水試航動畫引擎（支援最多 3 艘畫舫同遊，超過依序漂走）
     // ==========================================
+    let simAnimId = null;
+    const simState = {
+      time: 0,
+      boatX: -120,
+      boatY: 0,
+      vy: 0,
+      angle: 0,
+      splashed: false,
+      broken: false,
+      modalShown: false,
+      evaluation: null,
+      activeBoatSnapshot: null,
+      splashes: [],
+      fireworks: [],
+      debris: []
+    };
+
+    function cloneCurrentBoatSnapshot() {
+      const clonedItems = {};
+      Object.keys(gameState.placedItems).forEach(k => {
+        clonedItems[k] = { ...gameState.placedItems[k] };
+      });
+      const clonedSprites = {};
+      Object.keys(gameState.customSprites).forEach(k => {
+        clonedSprites[k] = { ...gameState.customSprites[k] };
+      });
+      return {
+        id: Date.now() + Math.random(),
+        theme: getCurrentTheme(),
+        placedItems: clonedItems,
+        customSprites: clonedSprites,
+        isSuccess: true,
+        phaseOffset: Math.random() * Math.PI * 2,
+        slotIndex: 0,
+        x: 0,
+        y: 0,
+        leaving: false,
+        scale: 0.64
+      };
+    }
+
+    function reassignFleetSlots() {
+      // 最多保留 3 艘現役畫舫在江面上，超過 3 艘時最舊的依序標記為 leaving 漂走
+      const activeBoats = gameState.riverFleet.filter(b => !b.leaving);
+      while (activeBoats.length > 3) {
+        const oldest = activeBoats.shift();
+        oldest.leaving = true;
+      }
+      // 依序分配江面三個錯落有致的航道位置（遠、中、近景水波）
+      activeBoats.forEach((boat, idx) => {
+        boat.slotIndex = idx;
+      });
+    }
+
     function renderPartsTray() {
       const tray = document.getElementById('parts-tray');
       const theme = getCurrentTheme();
       document.getElementById('theme-badge').textContent = theme.themeName;
-
       tray.innerHTML = '';
 
       gameState.shuffledPartIds.forEach(partId => {
         const isPlaced = Boolean(gameState.placedItems[partId]);
         const vb = PART_BASE_VIEWBOX[partId];
         const card = document.createElement('div');
-        card.className = `part-card bg-[#fbf4e4] border-2 ${isPlaced ? 'border-[#bfa475] is-placed cursor-default' : 'border-[#8c6d46] cursor-grab active:cursor-grabbing'} rounded-xl p-1.5 sm:p-2 flex flex-col items-center justify-between shadow-sm`;
-        card.dataset.partId = partId;
-
+        card.className = `part-card ${isPlaced ? 'is-placed' : ''} bg-[#fbf5e6] border-2 border-[#bfa475] rounded-xl p-1.5 sm:p-2 flex flex-col items-center justify-between cursor-grab active:cursor-grabbing select-none shadow-sm`;
         card.innerHTML = `
           <div class="w-full h-11 sm:h-14 flex items-center justify-center pointer-events-none">
             <svg viewBox="0 0 ${vb.w} ${vb.h}" class="max-w-full max-h-full overflow-visible">
               ${getPartSVGInner(partId, theme)}
             </svg>
           </div>
-          <div class="w-full text-center mt-1 pointer-events-none">
-            <div class="text-[11px] sm:text-xs font-bold text-[#3a2a18] truncate">${theme.names[partId]}</div>
-            <div class="text-[10px] ${isPlaced ? 'text-[#2b6e5d] font-bold' : 'text-[#8c6d46]'}">
-              ${isPlaced ? '✓ 已置於圖紙' : '拖曳至圖紙'}
-            </div>
-          </div>
+          <span class="mt-1 text-[11px] sm:text-xs font-bold text-[#4a3723] text-center leading-tight pointer-events-none truncate w-full">
+            ${theme.names[partId]}
+          </span>
         `;
 
-        if (!isPlaced) {
-          card.addEventListener('pointerdown', (e) => startDragPart(e, partId, false));
-        }
+        card.addEventListener('pointerdown', (e) => {
+          startDragPart(e, partId, false);
+        });
         tray.appendChild(card);
       });
     }
@@ -1342,25 +1409,6 @@
       };
     }
 
-    // ==========================================
-    // 7. 江南河道下水試航動畫引擎
-    // ==========================================
-    let simAnimId = null;
-    const simState = {
-      time: 0,
-      boatX: -120,
-      boatY: 0,
-      vy: 0,
-      angle: 0,
-      splashed: false,
-      broken: false,
-      modalShown: false,
-      evaluation: null,
-      splashes: [],
-      fireworks: [],
-      debris: []
-    };
-
     function spawnSplash(x, y, count = 24) {
       for (let i = 0; i < count; i++) {
         simState.splashes.push({
@@ -1402,6 +1450,11 @@
       document.getElementById('result-modal').classList.add('hidden');
 
       const pill = document.getElementById('river-status-pill');
+      const pillBox = pill.parentElement;
+      const nextBtn = document.getElementById('btn-next-boat-top');
+
+      pillBox.classList.remove('hidden');
+      nextBtn.classList.add('hidden');
       pill.textContent = '⛵ 吉時已到，畫舫順滑道入水...';
 
       const canvas = document.getElementById('river-canvas');
@@ -1409,15 +1462,21 @@
       canvas.width = rect.width;
       canvas.height = rect.height;
 
+      const snapshot = cloneCurrentBoatSnapshot();
+      snapshot.isSuccess = evalRes.success;
+      snapshot.x = canvas.width * 0.14;
+      snapshot.y = canvas.height * 0.42;
+
       simState.time = 0;
-      simState.boatX = canvas.width * 0.16;
-      simState.boatY = canvas.height * 0.36;
-      simState.vy = 2.5;
-      simState.angle = 0.14;
+      simState.boatX = snapshot.x;
+      simState.boatY = snapshot.y;
+      simState.vy = 2.0;
+      simState.angle = 0.05;
       simState.splashed = false;
       simState.broken = false;
       simState.modalShown = false;
       simState.evaluation = evalRes;
+      simState.activeBoatSnapshot = snapshot;
       simState.splashes = [];
       simState.fireworks = [];
       simState.debris = [];
@@ -1468,18 +1527,61 @@
       ctx.closePath();
       ctx.fill();
 
-      // 2. 物理運動更新
+      // 繪製江水底色（在畫舫之前先畫上半部江面，讓三艘船按遠近景深自然停泊在水面上）
+      const waterGrad = ctx.createLinearGradient(0, waterY, 0, h);
+      waterGrad.addColorStop(0, 'rgba(26, 75, 92, 0.94)');
+      waterGrad.addColorStop(1, '#0d2633');
+      ctx.fillStyle = waterGrad;
+      ctx.fillRect(0, waterY, w, h - waterY);
+
+      // 2. 更新並繪製既有的水上畫舫艦隊（最多 3 艘駐留，第 4 艘加入時最舊的依序往右漂走）
+      // 調整吃水高度，讓每艘畫舫的龍骨都穩穩浮在水波線上，絕不看起來像下沉
+      const slotConfigs = [
+        { xRatio: 0.74, yOffset: -20, scale: 0.50 }, // 第 1 艘（遠景右側，貼近遠方水岸線）
+        { xRatio: 0.48, yOffset: -6,  scale: 0.58 }, // 第 2 艘（中景中央，平穩浮於江心）
+        { xRatio: 0.22, yOffset: 10,  scale: 0.65 }  // 第 3 艘（近景左側，最靠近前景）
+      ];
+
+      gameState.riverFleet.forEach(boat => {
+        if (boat.leaving) {
+          // 超過 3 艘時，最舊的畫舫順水向畫面右側平穩漂走
+          boat.x += 135 * dt;
+          boat.y += Math.sin(simState.time * 2.5 + boat.phaseOffset) * 0.25;
+        } else {
+          const cfg = slotConfigs[boat.slotIndex] || slotConfigs[2];
+          const targetX = w * cfg.xRatio;
+          const targetY = waterY + cfg.yOffset;
+          boat.x += (targetX - boat.x) * Math.min(1, 2.8 * dt);
+          boat.y += (targetY - boat.y) * Math.min(1, 2.8 * dt);
+          boat.scale += (cfg.scale - boat.scale) * Math.min(1, 2.8 * dt);
+        }
+      });
+      // 移除已經完全漂出畫面右側的舊畫舫
+      gameState.riverFleet = gameState.riverFleet.filter(b => !b.leaving || b.x < w + 320);
+
+      // 3. 當前新下水畫舫的物理運動更新
       if (!simState.splashed) {
-        simState.boatX += 110 * dt;
-        simState.boatY += 155 * dt;
-        if (simState.boatY >= waterY - 12) {
-          simState.boatY = waterY - 12;
+        simState.boatX += 95 * dt;
+        simState.boatY += 135 * dt;
+        if (simState.boatY >= waterY - 14) {
+          simState.boatY = waterY - 14;
+          simState.angle = 0;
           simState.splashed = true;
           sound.playSplash();
-          spawnSplash(simState.boatX, waterY, 34);
+          spawnSplash(simState.boatX, waterY - 4, 30);
 
           if (simState.evaluation.success) {
-            document.getElementById('river-status-pill').textContent = '🎉 水密隔艙穩固、畫舫穩如泰山，順水行舟、歌舞昇平！';
+            // 成功下水：拿掉螢幕頂部提示框，讓畫面純淨只留畫舫在水上漂，並納入 3 艘艦隊！
+            document.getElementById('river-status-pill').parentElement.classList.add('hidden');
+            document.getElementById('btn-next-boat-top').classList.remove('hidden');
+
+            const newFleetBoat = simState.activeBoatSnapshot;
+            newFleetBoat.x = simState.boatX;
+            newFleetBoat.y = simState.boatY;
+            gameState.riverFleet.push(newFleetBoat);
+            reassignFleetSlots();
+            simState.activeBoatSnapshot = null; // 交由 riverFleet 統一管理漂浮與退場
+
             sound.playSuccessMelody();
           } else if (!simState.evaluation.hasBulkheadInHull) {
             document.getElementById('river-status-pill').textContent = '🌊 船身內未裝水密隔艙！江水湧入船艙，畫舫嚴重歪斜下沉！';
@@ -1490,23 +1592,13 @@
       } else {
         // 入水後表現
         if (simState.evaluation.success) {
-          simState.boatX = Math.min(w * 0.52, simState.boatX + 48 * dt);
-          simState.boatY = waterY - 10 + Math.sin(simState.time * 3.2) * 4;
-          simState.angle = Math.sin(simState.time * 2.5) * 0.025;
-
-          if (Math.random() < 0.06) spawnFirework(w, h);
-          if (simState.time > 3.6 && !simState.modalShown) {
-            simState.modalShown = true;
-            openResultModal(true);
-          }
+          if (Math.random() < 0.05) spawnFirework(w, h);
         } else if (!simState.evaluation.hasBulkheadInHull) {
-          // 未在船身內安裝水密隔艙：畫舫大幅歪向一邊（傾斜）並緩緩下沉！
           if (!simState.broken && simState.time > 0.9) {
             simState.broken = true;
             sound.playBreak();
             spawnSplash(simState.boatX, waterY, 36);
           }
-          // 持續向一側大幅傾斜（最多傾角達 0.68 弧度 ≈ 39 度）並沉入水中
           simState.angle = Math.min(0.68, simState.angle + 0.34 * dt);
           simState.boatY += 34 * dt;
 
@@ -1515,12 +1607,10 @@
             openResultModal(false);
           }
         } else {
-          // 散架下沉演出
           if (simState.time > 1.3 && !simState.broken) {
             simState.broken = true;
             sound.playBreak();
             spawnSplash(simState.boatX, waterY, 40);
-            // 生成散架飛散的木板碎片
             Object.keys(gameState.placedItems).forEach((partId, idx) => {
               simState.debris.push({
                 partId,
@@ -1548,15 +1638,66 @@
         }
       }
 
-      // 3. 繪製畫舫（忠實呈現玩家在藍圖上拼裝出的樣子與自訂配色）
-      ctx.save();
-      ctx.translate(simState.boatX, simState.boatY);
-      ctx.rotate(simState.angle);
+      // 4. 依 Y 軸深度排序繪製所有水上畫舫（包含艦隊中的最多 3 艘船 + 正在滑入/沉沒的新船）
+      const drawQueue = [];
+      gameState.riverFleet.forEach(boat => {
+        const bobY = boat.y + Math.sin(simState.time * 2.8 + boat.phaseOffset) * 3;
+        const bobAngle = Math.sin(simState.time * 2.2 + boat.phaseOffset) * 0.02;
+        drawQueue.push({
+          x: boat.x,
+          y: bobY,
+          angle: bobAngle,
+          scale: boat.scale,
+          snapshot: boat,
+          isCelebrating: true
+        });
+      });
 
-      if (!simState.broken || !simState.evaluation.hasBulkheadInHull) {
-        drawAssembledBoatOnCanvas(ctx, theme, simState.splashed && simState.evaluation.success);
+      if (simState.activeBoatSnapshot && (!simState.broken || !simState.evaluation.hasBulkheadInHull)) {
+        drawQueue.push({
+          x: simState.boatX,
+          y: simState.boatY,
+          angle: simState.angle,
+          scale: 0.65,
+          snapshot: simState.activeBoatSnapshot,
+          isCelebrating: simState.splashed && simState.evaluation.success
+        });
       }
-      ctx.restore();
+
+      drawQueue.sort((a, b) => a.y - b.y);
+      drawQueue.forEach(entry => {
+        ctx.save();
+        ctx.translate(entry.x, entry.y);
+        ctx.rotate(entry.angle);
+        drawAssembledBoatOnCanvas(ctx, entry.snapshot, entry.isCelebrating, entry.scale);
+        ctx.restore();
+
+        // 在每艘浮在水面上的畫舫船底繪製水波吃水光影與白浪，強化「浮在水上」的立體感
+        if (entry.isCelebrating) {
+          ctx.save();
+          const waterlineY = entry.y + 22 * entry.scale;
+          const halfSpan = 135 * entry.scale;
+          ctx.strokeStyle = 'rgba(224, 242, 254, 0.72)';
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.moveTo(entry.x - halfSpan, waterlineY);
+          ctx.quadraticCurveTo(
+            entry.x,
+            waterlineY + 4 + Math.sin(simState.time * 4 + entry.x) * 2,
+            entry.x + halfSpan,
+            waterlineY
+          );
+          ctx.stroke();
+
+          ctx.strokeStyle = 'rgba(186, 230, 253, 0.35)';
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(entry.x - halfSpan * 0.85, waterlineY + 6);
+          ctx.quadraticCurveTo(entry.x, waterlineY + 9, entry.x + halfSpan * 0.85, waterlineY + 6);
+          ctx.stroke();
+          ctx.restore();
+        }
+      });
 
       // 散架碎片動畫
       simState.debris.forEach(d => {
@@ -1576,18 +1717,12 @@
         ctx.restore();
       });
 
-      // 4. 繪製江水波浪
-      const waterGrad = ctx.createLinearGradient(0, waterY, 0, h);
-      waterGrad.addColorStop(0, 'rgba(26, 75, 92, 0.92)');
-      waterGrad.addColorStop(1, '#0d2633');
-      ctx.fillStyle = waterGrad;
-      ctx.fillRect(0, waterY, w, h - waterY);
-
-      ctx.strokeStyle = 'rgba(186, 230, 253, 0.35)';
+      // 5. 前景水波紋路
+      ctx.strokeStyle = 'rgba(186, 230, 253, 0.32)';
       ctx.lineWidth = 2;
       for (let row = 0; row < 4; row++) {
         ctx.beginPath();
-        const wy = waterY + 14 + row * 28;
+        const wy = waterY + 18 + row * 32;
         for (let x = 0; x <= w; x += 24) {
           const y = wy + Math.sin(x * 0.02 + simState.time * 3 + row) * 4;
           if (x === 0) ctx.moveTo(x, y);
@@ -1617,7 +1752,7 @@
         f.life -= 0.018;
         if (f.life > 0) {
           ctx.fillStyle = f.color;
-          ctx.globalAlpha = Math.max(0, f.life);
+          ctx.globalAlpha = f.life;
           ctx.beginPath();
           ctx.arc(f.x, f.y, 3, 0, Math.PI * 2);
           ctx.fill();
@@ -1626,18 +1761,19 @@
       });
     }
 
-    function drawAssembledBoatOnCanvas(ctx, theme, isCelebrating) {
-      const items = gameState.placedItems;
-      const scale = 0.65;
+    function drawAssembledBoatOnCanvas(ctx, snapshot, isCelebrating, boatScale = 0.65) {
+      const theme = snapshot.theme;
+      const items = snapshot.placedItems;
+      const sprites = snapshot.customSprites || {};
       ctx.save();
-      ctx.scale(scale, scale);
+      ctx.scale(boatScale, boatScale);
 
       // 以玩家放置的船身（或所有已放部件中心）為基準點，忠實呈現玩家自由擺放的相對位置；
       // 若成功過關則微調吸附成嚴絲合縫的緊密貼合狀態
       const anchor = items.hull || { cx: 400, cy: 298 };
       ctx.translate(-anchor.cx, -anchor.cy);
 
-      const isTightFit = simState.evaluation && simState.evaluation.success;
+      const isTightFit = snapshot.isSuccess;
       const lanternOnLeft = items.lantern && items.cabin && (items.lantern.cx < items.cabin.cx);
       const rudderOnRight = items.rudder && items.hull && (items.rudder.cx > items.hull.cx);
 
@@ -1665,13 +1801,22 @@
         }
 
         // 若玩家有上傳該部位的自訂手繪貼圖，優先直接渲染手繪圖片至試航河面
-        const customSprite = gameState.customSprites && gameState.customSprites[partId];
+        const customSprite = sprites[partId];
         if (customSprite && customSprite.img && customSprite.img.complete) {
           const vb = PART_BASE_VIEWBOX[partId];
-          if (partId === 'lantern' && isCelebrating) {
-            ctx.rotate(Math.sin(simState.time * 4.5) * 0.08);
+          if (partId === 'lantern') {
+            if (isCelebrating) ctx.rotate(Math.sin(simState.time * 4.5 + (snapshot.phaseOffset || 0)) * 0.08);
+            const pulse = 0.85 + Math.sin(simState.time * 5 + (snapshot.phaseOffset || 0)) * 0.15;
+            const halo = ctx.createRadialGradient(0, 0, 6, 0, 0, 62 * pulse);
+            halo.addColorStop(0, 'rgba(254, 240, 138, 0.85)');
+            halo.addColorStop(0.45, 'rgba(251, 191, 36, 0.35)');
+            halo.addColorStop(1, 'rgba(251, 191, 36, 0)');
+            ctx.fillStyle = halo;
+            ctx.beginPath();
+            ctx.arc(0, 0, 62 * pulse, 0, Math.PI * 2);
+            ctx.fill();
           } else if (partId === 'rudder' && isCelebrating) {
-            ctx.rotate(Math.sin(simState.time * 4) * 0.12);
+            ctx.rotate(Math.sin(simState.time * 4 + (snapshot.phaseOffset || 0)) * 0.12);
           }
           const iw = customSprite.img.naturalWidth || vb.w;
           const ih = customSprite.img.naturalHeight || vb.h;
@@ -1973,9 +2118,23 @@
           ctx.fill();
           ctx.stroke();
         } else if (partId === 'lantern') {
-          // 宋代六角木雕宮燈與垂幔流蘇（航行時隨風微擺）
-          const sway = isCelebrating ? Math.sin(simState.time * 4.5) * 0.08 : 0;
+          // 宋代六角木雕宮燈與垂幔流蘇（航行時隨風微擺 + 溫暖光暈散開）
+          const phase = snapshot.phaseOffset || 0;
+          const sway = isCelebrating ? Math.sin(simState.time * 4.5 + phase) * 0.08 : 0;
           ctx.rotate(sway);
+
+          // 燭光向外散開的柔和漸層光暈
+          const pulse = isCelebrating ? (0.9 + Math.sin(simState.time * 5 + phase) * 0.14) : 0.85;
+          const haloRadius = 64 * pulse;
+          const haloGrad = ctx.createRadialGradient(6, -4, 4, 6, -4, haloRadius);
+          haloGrad.addColorStop(0, 'rgba(254, 249, 195, 0.92)');
+          haloGrad.addColorStop(0.38, 'rgba(253, 224, 71, 0.45)');
+          haloGrad.addColorStop(0.72, 'rgba(245, 158, 11, 0.18)');
+          haloGrad.addColorStop(1, 'rgba(245, 158, 11, 0)');
+          ctx.fillStyle = haloGrad;
+          ctx.beginPath();
+          ctx.arc(6, -4, haloRadius, 0, Math.PI * 2);
+          ctx.fill();
 
           ctx.strokeStyle = theme.lanternTrim;
           ctx.lineWidth = 3;
@@ -2017,6 +2176,12 @@
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
+
+          // 燈身中央溫暖透光內核
+          ctx.fillStyle = 'rgba(254, 252, 232, 0.65)';
+          ctx.beginPath();
+          ctx.ellipse(6, -4, 11, 15, 0, 0, Math.PI * 2);
+          ctx.fill();
 
           // 燈格線與三縷流蘇
           ctx.strokeStyle = theme.lanternTrim;
@@ -2550,6 +2715,12 @@
 
     document.getElementById('btn-back-dock-top').addEventListener('click', () => {
       returnToDock(false);
+    });
+
+    document.getElementById('btn-next-boat-top').addEventListener('click', () => {
+      gameState.themeIndex = (gameState.themeIndex + 1) % LEVEL_THEMES.length;
+      gameState.customColors = {};
+      returnToDock(true);
     });
 
     // 自訂音檔上傳與時間區間設定
