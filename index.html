@@ -2674,51 +2674,103 @@
             ctx.fillRect(winX, winY, 56, 54);
             ctx.strokeRect(winX, winY, 56, 54);
 
-            // 明窗內歌舞昇平剪影（先畫剪影再蓋上格扇窗櫺，呈現透過窗欞觀賞的寫實層次）
+            // 明窗內歌舞昇平黑色剪影（古典皮影戲意境：先畫墨黑剪影再蓋上格扇窗櫺）
             if (isCelebrating) {
               ctx.save();
-              ctx.fillStyle = '#5c210d';
+              ctx.beginPath();
+              ctx.rect(winX + 1, winY + 1, 54, 37);
+              ctx.clip();
+
+              const phase = snapshot.phaseOffset || 0;
+              ctx.fillStyle = '#120b05';
+              ctx.strokeStyle = '#120b05';
+              ctx.lineCap = 'round';
+              ctx.lineJoin = 'round';
+
               if (idx === 0) {
-                // 撫琴樂師剪影
+                // 左窗：抱琵琶／撫琴樂師黑色剪影
+                const swayL = Math.sin(simState.time * 3.2 + phase) * 1.2;
+                // 髮髻與頭部
                 ctx.beginPath();
-                ctx.arc(wx - 4, winY + 20, 5.5, 0, Math.PI * 2);
+                ctx.arc(wx - 4 + swayL, winY + 15, 4.3, 0, Math.PI * 2);
+                ctx.arc(wx - 6 + swayL, winY + 11, 2.2, 0, Math.PI * 2);
                 ctx.fill();
+                // 跪坐身形
                 ctx.beginPath();
-                ctx.moveTo(wx - 12, winY + 38);
-                ctx.quadraticCurveTo(wx - 4, winY + 26, wx + 4, winY + 38);
+                ctx.moveTo(wx - 13, winY + 38);
+                ctx.quadraticCurveTo(wx - 10, winY + 21, wx - 4 + swayL, winY + 20);
+                ctx.quadraticCurveTo(wx + 3, winY + 21, wx + 6, winY + 38);
+                ctx.closePath();
                 ctx.fill();
-                ctx.fillRect(wx - 18, winY + 33, 34, 3.5);
+                // 懷抱琵琶剪影
+                ctx.save();
+                ctx.translate(wx + 2, winY + 26);
+                ctx.rotate(-0.48);
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 4.5, 7.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillRect(-1.1, -15, 2.2, 10);
+                ctx.restore();
               } else if (idx === 1) {
-                // 水袖舞姬剪影
+                // 中窗：水袖舞姬黑色剪影（高髻、纖腰裙擺與雙道飄逸長水袖）
+                const danceT = simState.time * 5.2 + phase;
+                const bodySway = Math.sin(danceT * 0.5) * 2.2;
+                const sleeveWave1 = Math.sin(danceT) * 7.5;
+                const sleeveWave2 = Math.cos(danceT) * 7.5;
+
+                // 頭與高髮髻
                 ctx.beginPath();
-                ctx.arc(wx, winY + 18, 6, 0, Math.PI * 2);
+                ctx.arc(wx + bodySway, winY + 13.5, 4.4, 0, Math.PI * 2);
+                ctx.arc(wx + bodySway + 1.5, winY + 9, 2.4, 0, Math.PI * 2);
                 ctx.fill();
+
+                // 纖細身姿與翩翩長裙剪影
                 ctx.beginPath();
-                ctx.moveTo(wx - 9, winY + 38);
-                ctx.lineTo(wx, winY + 24);
-                ctx.lineTo(wx + 9, winY + 38);
+                ctx.moveTo(wx - 3.5 + bodySway, winY + 18.5);
+                ctx.lineTo(wx + 3.5 + bodySway, winY + 18.5);
+                ctx.lineTo(wx + 2.5 + bodySway * 0.5, winY + 26);
+                ctx.quadraticCurveTo(wx + 9, winY + 33, wx + 12, winY + 38);
+                ctx.lineTo(wx - 11, winY + 38);
+                ctx.quadraticCurveTo(wx - 8, winY + 33, wx - 2.5 + bodySway * 0.5, winY + 26);
+                ctx.closePath();
                 ctx.fill();
-                const wave = Math.sin(simState.time * 7.5) * 10;
-                ctx.strokeStyle = '#b91c1c';
-                ctx.lineWidth = 3;
+
+                // 左手揚起拋出的長水袖（S 形飄帶感）
                 ctx.beginPath();
-                ctx.moveTo(wx - 22, winY + 24 + wave);
-                ctx.quadraticCurveTo(wx, winY + 18, wx + 22, winY + 24 - wave);
-                ctx.stroke();
+                ctx.moveTo(wx - 2.5 + bodySway, winY + 19.5);
+                ctx.quadraticCurveTo(wx - 12, winY + 10 + sleeveWave1 * 0.4, wx - 21, winY + 15 + sleeveWave1);
+                ctx.quadraticCurveTo(wx - 25, winY + 21 + sleeveWave1, wx - 19, winY + 25 + sleeveWave1 * 0.7);
+                ctx.quadraticCurveTo(wx - 13, winY + 17 + sleeveWave1 * 0.4, wx - 3 + bodySway, winY + 22);
+                ctx.closePath();
+                ctx.fill();
+
+                // 右手迴旋拂動的水袖（反向波浪呼應）
+                ctx.beginPath();
+                ctx.moveTo(wx + 2.5 + bodySway, winY + 19.5);
+                ctx.quadraticCurveTo(wx + 13, winY + 14 - sleeveWave2 * 0.4, wx + 22, winY + 19 - sleeveWave2);
+                ctx.quadraticCurveTo(wx + 25, winY + 26 - sleeveWave2, wx + 18, winY + 28 - sleeveWave2 * 0.7);
+                ctx.quadraticCurveTo(wx + 12, winY + 20 - sleeveWave2 * 0.4, wx + 3 + bodySway, winY + 22);
+                ctx.closePath();
+                ctx.fill();
               } else {
-                // 吹笛樂師剪影
+                // 右窗：橫笛／古琴樂師黑色剪影
+                const swayR = Math.cos(simState.time * 3.0 + phase) * 1.2;
                 ctx.beginPath();
-                ctx.arc(wx + 3, winY + 19, 5.5, 0, Math.PI * 2);
+                ctx.arc(wx + 3 + swayR, winY + 15, 4.3, 0, Math.PI * 2);
+                ctx.arc(wx + 5 + swayR, winY + 11, 2.2, 0, Math.PI * 2);
                 ctx.fill();
+                // 端坐身形
                 ctx.beginPath();
-                ctx.moveTo(wx - 5, winY + 38);
-                ctx.quadraticCurveTo(wx + 3, winY + 26, wx + 11, winY + 38);
+                ctx.moveTo(wx - 6, winY + 38);
+                ctx.quadraticCurveTo(wx - 3, winY + 21, wx + 3 + swayR, winY + 20);
+                ctx.quadraticCurveTo(wx + 10, winY + 21, wx + 13, winY + 38);
+                ctx.closePath();
                 ctx.fill();
-                ctx.strokeStyle = '#5c210d';
-                ctx.lineWidth = 2.6;
+                // 橫吹玉笛剪影
+                ctx.lineWidth = 2.1;
                 ctx.beginPath();
-                ctx.moveTo(wx - 18, winY + 22);
-                ctx.lineTo(wx + 14, winY + 18);
+                ctx.moveTo(wx - 16, winY + 19 + swayR * 0.5);
+                ctx.lineTo(wx + 12, winY + 15.5 + swayR * 0.5);
                 ctx.stroke();
               }
               ctx.restore();
