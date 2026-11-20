@@ -81,6 +81,9 @@
       <button id="btn-mobile-qr" type="button" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#8c5a08] hover:bg-[#a66c0c] border border-[#fde047]/60 text-[#fff8e7] text-xs font-bold shadow cursor-pointer">
         📱 手機造船 QR
       </button>
+      <button id="btn-open-river-stage" type="button" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#1e40af] hover:bg-[#1d4ed8] border border-[#93c5fd]/70 text-[#fff8e7] text-xs font-bold shadow cursor-pointer" title="直接切換至江面舞台，等待各載具畫舫匯入">
+        🌊 展示江面
+      </button>
       <button id="btn-custom-audio" type="button" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#6b4c35] hover:bg-[#825d41] border border-[#bfa475]/60 text-[#fff8e7] text-xs font-bold shadow cursor-pointer">
         🎼 上傳配樂
       </button>
@@ -150,6 +153,9 @@
     </div>
 
     <div class="absolute top-3 right-3 flex items-center gap-2 z-10">
+      <button id="btn-river-qr" class="px-3 py-1.5 rounded-xl bg-[#8c5a08]/95 hover:bg-[#a66c0c] border border-[#fde047]/70 text-[#fff8e7] text-xs font-bold shadow-lg cursor-pointer">
+        📱 掃碼匯入畫舫
+      </button>
       <button id="btn-next-boat-top" class="hidden px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#2b6e5d] to-[#1f5245] hover:from-[#348570] hover:to-[#266353] border border-[#86efac]/70 text-[#fff8e7] text-xs font-bold shadow-lg cursor-pointer">
         + 繼續打造新畫舫
       </button>
@@ -330,6 +336,15 @@
           <p class="text-[10px] sm:text-[11px] text-[#d9c39e] truncate">通道：<span id="mobile-room-label" class="font-mono font-bold text-[#fde047]">----</span> <span id="mobile-conn-badge" class="ml-1 px-1.5 py-0.5 rounded-full bg-[#2b6e5d] text-[#fff8e7] text-[10px] font-bold">● 連線中</span></p>
         </div>
         <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          <button id="btn-mobile-tab-build" type="button" class="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg bg-[#2b6e5d] border border-[#86efac]/70 text-[#fff8e7] text-[11px] sm:text-xs font-bold cursor-pointer">
+            🔨 造船台
+          </button>
+          <button id="btn-mobile-tab-river" type="button" class="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg bg-[#6b4c35] border border-[#bfa475]/60 text-[#fff8e7] text-[11px] sm:text-xs font-bold cursor-pointer">
+            🌊 看江面
+          </button>
+          <button id="btn-mobile-palette" type="button" class="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg bg-[#6b4c35] border border-[#bfa475]/60 text-[#fff8e7] text-[11px] sm:text-xs font-bold cursor-pointer">
+            🌊 同屏江面
+          </button>
           <button id="btn-mobile-palette" type="button" class="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg bg-[#6b4c35] border border-[#bfa475]/60 text-[11px] sm:text-xs font-bold cursor-pointer">
             🎨 配色
           </button>
@@ -342,6 +357,14 @@
         </div>
       </div>
     </header>
+
+    <!-- 手機同屏觀賞江南河道分頁（與大螢幕即時同步顯示最多 10 艘畫舫） -->
+    <div id="mobile-river-mirror-panel" class="hidden flex-1 relative w-full h-full overflow-hidden">
+      <canvas id="mobile-river-canvas" class="w-full h-full block"></canvas>
+      <div class="absolute top-2.5 left-1/2 -translate-x-1/2 bg-[#2b1d10]/85 border border-[#d4af37] text-[#fff8e7] px-3 py-1 rounded-full text-[11px] font-bold shadow whitespace-nowrap pointer-events-none">
+        🌊 與大螢幕即時同屏・江面共 <span id="mobile-fleet-count">0</span> / 10 艘畫舫
+      </div>
+    </div>
 
     <!-- 手機觸控組裝主畫面（直向為上下分布，橫向自動切換為左右並排） -->
     <div id="mobile-build-panel" class="flex-1 flex flex-col landscape:flex-row justify-between p-1.5 sm:p-2.5 gap-1.5 sm:gap-2.5 min-h-0">
@@ -415,8 +438,96 @@
     let activeMobileConn = null;
     const connectedMobiles = [];
 
+    function updateMobileFleetBadge() {
+      const el = document.getElementById('mobile-fleet-count');
+      if (el) {
+        const activeCount = gameState.riverFleet.filter(b => !b.leaving).length;
+        el.textContent = String(activeCount);
+      }
+    }
+
+    function hydrateRemoteFleet(remoteFleetList) {
+      if (!Array.isArray(remoteFleetList)) return;
+      const canvas = document.getElementById('mobile-river-canvas');
+      const w = (canvas && canvas.width) ? canvas.width : window.innerWidth;
+      const h = (canvas && canvas.height) ? canvas.height : window.innerHeight;
+      const waterY = h * 0.62;
+      const layouts = getTenBoatSlotLayouts(w);
+
+      gameState.riverFleet = remoteFleetList.map(item => {
+        const hydratedSprites = {};
+        if (item.customSprites) {
+          Object.keys(item.customSprites).forEach(pid => {
+            const entry = item.customSprites[pid];
+            if (entry && entry.dataUrl) {
+              const img = new Image();
+              img.src = entry.dataUrl;
+              hydratedSprites[pid] = { ...entry, img };
+            }
+          });
+        }
+        const slot = layouts[item.slotIndex] || layouts[0];
+        return {
+          ...item,
+          customSprites: hydratedSprites,
+          x: slot.targetX,
+          y: waterY + slot.yOffset,
+          scale: slot.scale
+        };
+      });
+      updateMobileFleetBadge();
+    }
+
+    function serializeFleetForBroadcast() {
+      return gameState.riverFleet.map(b => {
+        const serializedSprites = {};
+        if (b.customSprites) {
+          Object.keys(b.customSprites).forEach(pid => {
+            if (b.customSprites[pid] && b.customSprites[pid].dataUrl) {
+              serializedSprites[pid] = {
+                dataUrl: b.customSprites[pid].dataUrl,
+                name: b.customSprites[pid].name || ''
+              };
+            }
+          });
+        }
+        return {
+          id: b.id,
+          theme: b.theme,
+          placedItems: b.placedItems,
+          customSprites: serializedSprites,
+          isSuccess: b.isSuccess,
+          phaseOffset: b.phaseOffset,
+          slotIndex: b.slotIndex,
+          leaving: b.leaving,
+          scale: b.scale
+        };
+      });
+    }
+
+    function broadcastFleetStateToMobiles() {
+      if (isMobileUploaderMode) return;
+      const payload = {
+        type: 'SYNC_FLEET_STATE',
+        fleet: serializeFleetForBroadcast()
+      };
+      for (let i = connectedMobiles.length - 1; i >= 0; i--) {
+        const conn = connectedMobiles[i];
+        if (conn && conn.open) {
+          try { conn.send(payload); } catch (e) {}
+        } else {
+          connectedMobiles.splice(i, 1);
+        }
+      }
+      updateMobileFleetBadge();
+    }
+
     function handleIncomingSpritePayload(msg) {
       if (!msg || !msg.type) return;
+      if (msg.type === 'SYNC_FLEET_STATE' && isMobileUploaderMode) {
+        hydrateRemoteFleet(msg.fleet);
+        return;
+      }
       if (msg.type === 'LAUNCH_CAST_BOAT' && msg.snapshot && !isMobileUploaderMode) {
         // 接收手機端完成組裝並投映過來的畫舫，直接在大螢幕江南河道下水！
         launchRemoteBoatOnBigScreen(msg.snapshot);
@@ -480,18 +591,30 @@
           peerInstance.on('connection', (conn) => {
             connectedMobiles.push(conn);
             if (statusBadge) {
-              statusBadge.textContent = '● 手機已連線！傳圖即時同步中';
+              statusBadge.textContent = `● 已連線 ${connectedMobiles.length} 台載具！同屏同步中`;
               statusBadge.className = 'px-2 py-0.5 rounded bg-[#15803d] text-[#fff8e7] text-[11px] font-bold';
             }
-            showToast('📱 手機已成功連入畫舫工坊！');
+            showToast('📱 新載具已成功連入畫舫工坊！');
+
+            conn.on('open', () => {
+              // 新載具連入時同步目前江面已匯入的畫舫列表（不強制跳轉手機畫面）
+              try {
+                conn.send({
+                  type: 'SYNC_FLEET_STATE',
+                  fleet: serializeFleetForBroadcast()
+                });
+              } catch (e) {}
+            });
 
             conn.on('data', (data) => {
               handleIncomingSpritePayload(data);
             });
-            conn.on('close', () => {
-              if (statusBadge) {
-                statusBadge.textContent = '● 跨裝置通道已就緒（等待手機掃碼）';
+            conn.on('open', () => {
+              if (mobileBadge) {
+                mobileBadge.textContent = '● 已連上大螢幕';
+                mobileBadge.className = 'px-2.5 py-1 rounded-full bg-[#2b6e5d] text-[#fff8e7] text-[11px] font-bold';
               }
+              showToast('✅ 已連上大螢幕，組裝完成即可投映到江面！');
             });
           });
           peerInstance.on('error', () => {
@@ -1216,16 +1339,17 @@
     }
 
     function reassignFleetSlots() {
-      // 最多保留 3 艘現役畫舫在江面上，超過 3 艘時最舊的依序標記為 leaving 漂走
+      // 最多保留 10 艘現役畫舫在江面上，超過 10 艘時最舊的依序標記為 leaving 漂走
       const activeBoats = gameState.riverFleet.filter(b => !b.leaving);
-      while (activeBoats.length > 3) {
+      while (activeBoats.length > 10) {
         const oldest = activeBoats.shift();
         oldest.leaving = true;
       }
-      // 依序分配江面三個錯落有致的航道位置（遠、中、近景水波）
+      // 依序分配江面十個遠、中、近景錯落水波泊位（第一艘在最右側，後續依序向左鋪展）
       activeBoats.forEach((boat, idx) => {
         boat.slotIndex = idx;
       });
+      broadcastFleetStateToMobiles();
     }
 
     function renderPartsTray() {
@@ -1490,11 +1614,12 @@
       }
     }
 
-    function startRiverSimulation(remoteSnapshot = null) {
-      const evalRes = remoteSnapshot
+    function startRiverSimulation(remoteSnapshot = null, isStageStandby = false) {
+      const evalRes = (remoteSnapshot || isStageStandby)
         ? { success: true, hasBulkheadInHull: true, errors: [] }
         : evaluateBoatBuild();
       gameState.phase = 'river';
+      broadcastFleetStateToMobiles();
 
       document.getElementById('dock-stage').classList.add('hidden');
       document.getElementById('river-stage').classList.remove('hidden');
@@ -1504,28 +1629,36 @@
       const pillBox = pill.parentElement;
       const nextBtn = document.getElementById('btn-next-boat-top');
 
-      pillBox.classList.remove('hidden');
-      nextBtn.classList.add('hidden');
-      pill.textContent = remoteSnapshot
-        ? '📱 收到手機觀眾打造的新畫舫，正在滑入江南河道！'
-        : '⛵ 吉時已到，畫舫順滑道入水...';
+      if (isStageStandby) {
+        pillBox.classList.remove('hidden');
+        nextBtn.classList.remove('hidden');
+        pill.textContent = '🌊 江南河道展示舞台・等待各載具畫舫匯入（最多同遊 10 艘）';
+      } else {
+        pillBox.classList.remove('hidden');
+        nextBtn.classList.add('hidden');
+        pill.textContent = remoteSnapshot
+          ? '📱 收到新載具創作的畫舫，正在滑入江南河道！'
+          : '⛵ 吉時已到，畫舫順滑道入水...';
+      }
 
       const canvas = document.getElementById('river-canvas');
       const rect = canvas.parentElement.getBoundingClientRect();
       canvas.width = rect.width;
       canvas.height = rect.height;
 
-      const snapshot = remoteSnapshot || cloneCurrentBoatSnapshot();
-      snapshot.isSuccess = evalRes.success;
-      snapshot.x = canvas.width * 0.14;
-      snapshot.y = canvas.height * 0.42;
+      const snapshot = isStageStandby ? null : (remoteSnapshot || cloneCurrentBoatSnapshot());
+      if (snapshot) {
+        snapshot.isSuccess = evalRes.success;
+        snapshot.x = canvas.width * 0.14;
+        snapshot.y = canvas.height * 0.42;
+      }
 
       simState.time = 0;
       simState.boatX = canvas.width * 0.14;
       simState.boatY = canvas.height * 0.42;
       simState.vy = 0;
       simState.angle = 0.24;
-      simState.splashed = false;
+      simState.splashed = isStageStandby;
       simState.broken = false;
       simState.modalShown = false;
       simState.evaluation = evalRes;
@@ -1744,16 +1877,66 @@
     });
 
     document.getElementById('btn-mobile-sprites-tab').addEventListener('click', () => {
+      stopMobileMirrorLoop();
       document.getElementById('mobile-build-panel').classList.add('hidden');
+      document.getElementById('mobile-river-mirror-panel').classList.add('hidden');
       document.getElementById('mobile-upload-drawer').classList.remove('hidden');
       renderMobilePartsList();
     });
 
     document.getElementById('btn-back-mobile-build').addEventListener('click', () => {
       document.getElementById('mobile-upload-drawer').classList.add('hidden');
+      document.getElementById('mobile-river-mirror-panel').classList.add('hidden');
       document.getElementById('mobile-build-panel').classList.remove('hidden');
       renderMobileBuildCanvas();
       renderMobileBuildTray();
+    });
+
+    let mobileMirrorAnimId = null;
+    function stopMobileMirrorLoop() {
+      if (mobileMirrorAnimId) {
+        cancelAnimationFrame(mobileMirrorAnimId);
+        mobileMirrorAnimId = null;
+      }
+    }
+
+    function startMobileMirrorLoop() {
+      stopMobileMirrorLoop();
+      const canvas = document.getElementById('mobile-river-canvas');
+      if (!canvas) return;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = Math.max(300, rect.width);
+      canvas.height = Math.max(200, rect.height);
+      updateMobileFleetBadge();
+
+      let lastTs = performance.now();
+      const loop = (now) => {
+        const dt = Math.min(0.05, (now - lastTs) / 1000);
+        lastTs = now;
+        renderSharedRiverScene(canvas, dt, true);
+        mobileMirrorAnimId = requestAnimationFrame(loop);
+      };
+      mobileMirrorAnimId = requestAnimationFrame(loop);
+    }
+
+    document.getElementById('btn-mobile-tab-build').addEventListener('click', () => {
+      stopMobileMirrorLoop();
+      document.getElementById('mobile-river-mirror-panel').classList.add('hidden');
+      document.getElementById('mobile-upload-drawer').classList.add('hidden');
+      document.getElementById('mobile-build-panel').classList.remove('hidden');
+      document.getElementById('btn-mobile-tab-build').className = 'px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg bg-[#2b6e5d] border border-[#86efac]/70 text-[#fff8e7] text-[11px] sm:text-xs font-bold cursor-pointer';
+      document.getElementById('btn-mobile-tab-river').className = 'px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg bg-[#6b4c35] border border-[#bfa475]/60 text-[#fff8e7] text-[11px] sm:text-xs font-bold cursor-pointer';
+      renderMobileBuildCanvas();
+      renderMobileBuildTray();
+    });
+
+    document.getElementById('btn-mobile-tab-river').addEventListener('click', () => {
+      document.getElementById('mobile-build-panel').classList.add('hidden');
+      document.getElementById('mobile-upload-drawer').classList.add('hidden');
+      document.getElementById('mobile-river-mirror-panel').classList.remove('hidden');
+      document.getElementById('btn-mobile-tab-river').className = 'px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg bg-[#2b6e5d] border border-[#86efac]/70 text-[#fff8e7] text-[11px] sm:text-xs font-bold cursor-pointer';
+      document.getElementById('btn-mobile-tab-build').className = 'px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg bg-[#6b4c35] border border-[#bfa475]/60 text-[#fff8e7] text-[11px] sm:text-xs font-bold cursor-pointer';
+      startMobileMirrorLoop();
     });
 
     document.getElementById('btn-mobile-cast-boat').addEventListener('click', () => {
@@ -1784,9 +1967,10 @@
           type: 'LAUNCH_CAST_BOAT',
           snapshot: payloadSnapshot
         });
-        showToast('🎉 畫舫已成功發射投映至大螢幕江面！');
+        showToast('🎉 畫舫已投映至大螢幕！點擊上方「🌊 同屏江面」可即時觀賞');
       } else {
         // 若為同機模擬測試模式，直接關閉手機模擬層並在當前大螢幕江面下水！
+        stopMobileMirrorLoop();
         const mobileView = document.getElementById('mobile-uploader-view');
         mobileView.classList.add('hidden');
         mobileView.classList.remove('flex');
@@ -1803,7 +1987,23 @@
       renderMobileBuildTray();
     });
 
-    function updateAndDrawRiver(canvas, dt) {
+    function getTenBoatSlotLayouts(w) {
+      // 十艘畫舫全部穩穩吃水於 waterY 以下的遠、中、近三層江面水域（絕不飄浮在水際線上方）
+      return [
+        { targetX: w * 0.87, yOffset: 36, scale: 0.48 }, // 第 1 艘（最右中景）
+        { targetX: w * 0.72, yOffset: 14, scale: 0.43 }, // 第 2 艘（右遠景水面）
+        { targetX: w * 0.62, yOffset: 44, scale: 0.50 }, // 第 3 艘（右中景）
+        { targetX: w * 0.49, yOffset: 16, scale: 0.44 }, // 第 4 艘（中遠景水面）
+        { targetX: w * 0.39, yOffset: 48, scale: 0.51 }, // 第 5 艘（中景水面）
+        { targetX: w * 0.27, yOffset: 15, scale: 0.43 }, // 第 6 艘（左遠景水面）
+        { targetX: w * 0.18, yOffset: 42, scale: 0.49 }, // 第 7 艘（左中景）
+        { targetX: w * 0.80, yOffset: 76, scale: 0.52 }, // 第 8 艘（右近景）
+        { targetX: w * 0.51, yOffset: 82, scale: 0.53 }, // 第 9 艘（中近景）
+        { targetX: w * 0.23, yOffset: 78, scale: 0.52 }  // 第 10 艘（左近景）
+      ];
+    }
+
+    function renderSharedRiverScene(canvas, dt, isMirrorOnly = false) {
       const ctx = canvas.getContext('2d');
       const w = canvas.width;
       const h = canvas.height;
@@ -1833,6 +2033,47 @@
       ctx.fillStyle = moonHalo;
       ctx.beginPath();
       ctx.arc(w * 0.82, h * 0.18, 95, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 遠山層巒（遠景青黛山 + 近景墨綠山）
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.moveTo(0, waterY);
+      ctx.lineTo(0, waterY - h * 0.16);
+      ctx.quadraticCurveTo(w * 0.14, waterY - h * 0.28, w * 0.28, waterY - h * 0.15);
+      ctx.quadraticCurveTo(w * 0.44, waterY - h * 0.32, w * 0.62, waterY - h * 0.14);
+      ctx.quadraticCurveTo(w * 0.78, waterY - h * 0.26, w * 0.92, waterY - h * 0.15);
+      ctx.lineTo(w, waterY - h * 0.19);
+      ctx.lineTo(w, waterY);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#142030';
+      ctx.beginPath();
+      ctx.moveTo(0, waterY);
+      ctx.lineTo(0, waterY - h * 0.09);
+      ctx.quadraticCurveTo(w * 0.22, waterY - h * 0.21, w * 0.42, waterY - h * 0.08);
+      ctx.quadraticCurveTo(w * 0.66, waterY - h * 0.19, w * 0.88, waterY - h * 0.07);
+      ctx.lineTo(w, waterY - h * 0.11);
+      ctx.lineTo(w, waterY);
+      ctx.closePath();
+      ctx.fill();
+
+      // 江霧柔光層
+      const mistGrad = ctx.createLinearGradient(0, waterY - h * 0.12, 0, waterY);
+      mistGrad.addColorStop(0, 'rgba(148, 163, 184, 0)');
+      mistGrad.addColorStop(1, 'rgba(148, 163, 184, 0.22)');
+      ctx.fillStyle = mistGrad;
+      ctx.fillRect(0, waterY - h * 0.12, w, h * 0.12);
+
+      // 2. 江南碧波江水底色漸層
+      const riverGrad = ctx.createLinearGradient(0, waterY, 0, h);
+      riverGrad.addColorStop(0, '#0f2942');
+      riverGrad.addColorStop(0.45, '#0c2238');
+      riverGrad.addColorStop(1, '#071524');
+      ctx.fillStyle = riverGrad;
+      ctx.fillRect(0, waterY, w, h - waterY);
+
       // 岸邊十里長街：高低錯落有致的宋明江南臨水街市與疏朗燈火
       const streetCount = Math.max(12, Math.floor(w / 72));
       const streetStep = w / streetCount;
@@ -1994,12 +2235,8 @@
           ctx.fillRect(rx - rw / 2 + sway, ry, rw, 2);
         }
       }
-      // 2.5 更新水上畫舫艦隊位置（第一艘在最右邊，最多 3 艘停泊江面，超過 3 艘時最舊的往右漂走）
-      const slotLayouts = [
-        { targetX: w * 0.78, yOffset: -14, scale: 0.64 },
-        { targetX: w * 0.54, yOffset: -4,  scale: 0.65 },
-        { targetX: w * 0.30, yOffset: 6,   scale: 0.66 }
-      ];
+      // 2.5 更新水上畫舫艦隊位置（第一艘在最右邊，最多 10 艘停泊江面，超過 10 艘時最舊的往右漂走）
+      const slotLayouts = getTenBoatSlotLayouts(w);
       const cruiseSpeed = 85; // 勻速緩慢滑行速度（像素/秒），避免突然加速
       gameState.riverFleet.forEach(boat => {
         if (boat.leaving) {
@@ -2019,21 +2256,25 @@
       });
 
       // 移除已經完全漂出畫面右側的舊畫舫
+      const beforeCount = gameState.riverFleet.length;
       gameState.riverFleet = gameState.riverFleet.filter(b => !b.leaving || b.x < w + 320);
+      if (!isMirrorOnly && gameState.riverFleet.length !== beforeCount) {
+        broadcastFleetStateToMobiles();
+      }
 
-      // 3. 當前新下水畫舫的物理運動更新（勻速平穩滑入水中）
-      if (!simState.splashed) {
+      // 3. 當前新下水畫舫的物理運動更新（僅主機端有新船滑入時執行）
+      if (!isMirrorOnly && simState.activeBoatSnapshot && !simState.splashed) {
         simState.boatX += 75 * dt;
         simState.boatY += 95 * dt;
-        if (simState.boatY >= waterY - 14) {
-          simState.boatY = waterY - 14;
+        if (simState.boatY >= waterY + 24) {
+          simState.boatY = waterY + 24;
           simState.angle = 0;
           simState.splashed = true;
           sound.playSplash();
-          spawnSplash(simState.boatX, waterY - 4, 30);
+          spawnSplash(simState.boatX, waterY + 34, 30);
 
           if (simState.evaluation.success) {
-            // 成功下水：拿掉螢幕頂部提示框，讓畫面純淨只留畫舫在水上漂，並納入 3 艘艦隊！
+            // 成功下水：拿掉螢幕頂部提示框，讓畫面純淨只留畫舫在水上漂，並納入 10 艘艦隊！
             document.getElementById('river-status-pill').parentElement.classList.add('hidden');
             document.getElementById('btn-next-boat-top').classList.remove('hidden');
 
@@ -2051,7 +2292,7 @@
             document.getElementById('river-status-pill').textContent = '💥 糟糕！榫卯未合、重心失衡，畫舫入水進水散架了！';
           }
         }
-      } else {
+      } else if (!isMirrorOnly && simState.activeBoatSnapshot && simState.splashed) {
         // 入水後表現
         if (simState.evaluation.success) {
           if (Math.random() < 0.05) spawnFirework(w, h);
@@ -2100,7 +2341,7 @@
         }
       }
 
-      // 4. 依 Y 軸深度排序繪製所有水上畫舫（包含艦隊中的最多 3 艘船 + 正在滑入/沉沒的新船）
+      // 4. 依 Y 軸深度排序繪製所有水上畫舫（包含艦隊中的最多 10 艘船 + 正在滑入/沉沒的新船）
       const drawQueue = [];
       gameState.riverFleet.forEach(boat => {
         const bobY = boat.y + Math.sin(simState.time * 2.8 + boat.phaseOffset) * 3;
@@ -2109,18 +2350,18 @@
           x: boat.x,
           y: bobY,
           angle: bobAngle,
-          scale: boat.scale,
+          scale: boat.scale * (isMirrorOnly ? 0.72 : 1),
           snapshot: boat,
           isCelebrating: true
         });
       });
 
-      if (simState.activeBoatSnapshot && (!simState.broken || !simState.evaluation.hasBulkheadInHull)) {
+      if (!isMirrorOnly && simState.activeBoatSnapshot && (!simState.broken || !simState.evaluation.hasBulkheadInHull)) {
         drawQueue.push({
           x: simState.boatX,
           y: simState.boatY,
           angle: simState.angle,
-          scale: 0.65,
+          scale: 0.52,
           snapshot: simState.activeBoatSnapshot,
           isCelebrating: simState.splashed && simState.evaluation.success
         });
@@ -2221,6 +2462,10 @@
           ctx.globalAlpha = 1;
         }
       });
+    }
+
+    function updateAndDrawRiver(canvas, dt) {
+      renderSharedRiverScene(canvas, dt, false);
     }
 
     function drawAssembledBoatOnCanvas(ctx, snapshot, isCelebrating, boatScale = 0.65) {
@@ -2839,6 +3084,7 @@
       }
       sound.stopMelody();
       gameState.phase = 'dock';
+      broadcastFleetStateToMobiles();
 
       if (clearParts) {
         gameState.placedItems = {};
@@ -3153,6 +3399,14 @@
     // ==========================================
     // 9. 頂部按鈕與自訂音檔上傳視窗事件
     // ==========================================
+    document.getElementById('btn-open-river-stage').addEventListener('click', () => {
+      startRiverSimulation(null, true);
+    });
+
+    document.getElementById('btn-river-qr').addEventListener('click', () => {
+      document.getElementById('btn-custom-sprites').click();
+    });
+
     document.getElementById('btn-sound').addEventListener('click', (e) => {
       const muted = sound.toggleMute();
       e.currentTarget.textContent = muted ? '🔇 靜音' : '🔊 音效';
@@ -3320,6 +3574,12 @@
         const rect = canvas.parentElement.getBoundingClientRect();
         canvas.width = rect.width;
         canvas.height = rect.height;
+      }
+      const mobileCanvas = document.getElementById('mobile-river-canvas');
+      if (mobileCanvas && !document.getElementById('mobile-river-mirror-panel').classList.contains('hidden')) {
+        const rect = mobileCanvas.parentElement.getBoundingClientRect();
+        mobileCanvas.width = Math.max(300, rect.width);
+        mobileCanvas.height = Math.max(200, rect.height);
       }
     });
 
