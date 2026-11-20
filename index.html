@@ -156,6 +156,9 @@
       <button id="btn-river-qr" class="px-3 py-1.5 rounded-xl bg-[#8c5a08]/95 hover:bg-[#a66c0c] border border-[#fde047]/70 text-[#fff8e7] text-xs font-bold shadow-lg cursor-pointer">
         📱 掃碼匯入畫舫
       </button>
+      <button id="btn-stress-test-10" class="px-3 py-1.5 rounded-xl bg-[#6d28d9]/95 hover:bg-[#7c3aed] border border-[#ddd6fe]/70 text-[#fff8e7] text-xs font-bold shadow-lg cursor-pointer" title="自動模擬 10 位觀眾接連投映畫舫，測試大螢幕流暢度">
+        ⚡ 壓測 10 艘匯入
+      </button>
       <button id="btn-next-boat-top" class="hidden px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#2b6e5d] to-[#1f5245] hover:from-[#348570] hover:to-[#266353] border border-[#86efac]/70 text-[#fff8e7] text-xs font-bold shadow-lg cursor-pointer">
         + 繼續打造新畫舫
       </button>
@@ -505,21 +508,27 @@
       });
     }
 
+    let broadcastDebounceTimer = null;
     function broadcastFleetStateToMobiles() {
       if (isMobileUploaderMode) return;
-      const payload = {
-        type: 'SYNC_FLEET_STATE',
-        fleet: serializeFleetForBroadcast()
-      };
-      for (let i = connectedMobiles.length - 1; i >= 0; i--) {
-        const conn = connectedMobiles[i];
-        if (conn && conn.open) {
-          try { conn.send(payload); } catch (e) {}
-        } else {
-          connectedMobiles.splice(i, 1);
-        }
-      }
       updateMobileFleetBadge();
+      if (connectedMobiles.length === 0) return;
+
+      if (broadcastDebounceTimer) clearTimeout(broadcastDebounceTimer);
+      broadcastDebounceTimer = setTimeout(() => {
+        const payload = {
+          type: 'SYNC_FLEET_STATE',
+          fleet: serializeFleetForBroadcast()
+        };
+        for (let i = connectedMobiles.length - 1; i >= 0; i--) {
+          const conn = connectedMobiles[i];
+          if (conn && conn.open) {
+            try { conn.send(payload); } catch (e) {}
+          } else {
+            connectedMobiles.splice(i, 1);
+          }
+        }
+      }, 250);
     }
 
     function handleIncomingSpritePayload(msg) {
@@ -2235,6 +2244,21 @@
           ctx.fillRect(rx - rw / 2 + sway, ry, rw, 2);
         }
       }
+
+      // 江面水波紋路（繪製於背景江水圖層，確保所有水波都在畫舫後方，不會浮在船身上）
+      ctx.strokeStyle = 'rgba(186, 230, 253, 0.26)';
+      ctx.lineWidth = 1.8;
+      for (let row = 0; row < 5; row++) {
+        ctx.beginPath();
+        const wy = waterY + 14 + row * 28;
+        for (let x = 0; x <= w; x += 24) {
+          const y = wy + Math.sin(x * 0.02 + simState.time * 3 + row) * 3.5;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
       // 2.5 更新水上畫舫艦隊位置（第一艘在最右邊，最多 10 艘停泊江面，超過 10 艘時最舊的往右漂走）
       const slotLayouts = getTenBoatSlotLayouts(w);
       const cruiseSpeed = 85; // 勻速緩慢滑行速度（像素/秒），避免突然加速
@@ -2419,20 +2443,6 @@
         ctx.strokeRect(-26, -12, 52, 24);
         ctx.restore();
       });
-
-      // 5. 前景水波紋路
-      ctx.strokeStyle = 'rgba(186, 230, 253, 0.32)';
-      ctx.lineWidth = 2;
-      for (let row = 0; row < 4; row++) {
-        ctx.beginPath();
-        const wy = waterY + 18 + row * 32;
-        for (let x = 0; x <= w; x += 24) {
-          const y = wy + Math.sin(x * 0.02 + simState.time * 3 + row) * 4;
-          if (x === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
-      }
 
       // 5. 水花與煙火粒子
       simState.splashes.forEach(s => {
@@ -3405,6 +3415,57 @@
 
     document.getElementById('btn-river-qr').addEventListener('click', () => {
       document.getElementById('btn-custom-sprites').click();
+    });
+
+    let stressTestTimers = [];
+    document.getElementById('btn-stress-test-10').addEventListener('click', () => {
+      stressTestTimers.forEach(t => clearTimeout(t));
+      stressTestTimers = [];
+      showToast('⚡ 開始模擬 10 台載具接連匯入畫舫，觀察江面流暢度...');
+
+      const canvas = document.getElementById('river-canvas');
+      const w = canvas.width || window.innerWidth;
+      const h = canvas.height || window.innerHeight;
+      const waterY = h * 0.62;
+
+      for (let i = 0; i < 10; i++) {
+        const timer = setTimeout(() => {
+          const themeBase = LEVEL_THEMES[i % LEVEL_THEMES.length];
+          const swatch = CHINESE_SWATCHES[(i * 3) % CHINESE_SWATCHES.length];
+          const simBoat = {
+            id: Date.now() + Math.random() + i,
+            theme: {
+              ...themeBase,
+              cabinWall: swatch.hex,
+              cabinPillar: darkenHex(swatch.hex, 0.58)
+            },
+            placedItems: {
+              hull: { cx: 400, cy: 298 },
+              bulkhead: { cx: 400, cy: 303 },
+              cabin: { cx: 400, cy: 244 },
+              roof: { cx: 400, cy: 174 },
+              lantern: { cx: i % 2 === 0 ? 552 : 248, cy: 232 },
+              rudder: { cx: i % 2 === 0 ? 186 : 614, cy: 292 }
+            },
+            customSprites: {},
+            isSuccess: true,
+            phaseOffset: i * 0.65,
+            slotIndex: 0,
+            x: w * 0.08,
+            y: waterY + 24,
+            leaving: false,
+            scale: 0.48
+          };
+          gameState.riverFleet.push(simBoat);
+          reassignFleetSlots();
+          spawnSplash(w * 0.14, waterY + 34, 16);
+          if (i % 2 === 0) spawnFirework(w, h);
+          if (i === 9) {
+            showToast('✅ 已完成 10 艘畫舫同步匯入測試！');
+          }
+        }, i * 320);
+        stressTestTimers.push(timer);
+      }
     });
 
     document.getElementById('btn-sound').addEventListener('click', (e) => {
