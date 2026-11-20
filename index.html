@@ -2970,8 +2970,11 @@
           ctx.lineTo(14, 49);
           ctx.stroke();
         } else if (partId === 'rudder') {
-          // 宋代平衡長櫓舵（航行時微微划水擺動，並配有船尾舵工掌舵）
+          // 宋代平衡長櫓舵（僅長櫓本身隨划水擺動，舵手雙腳穩站船尾甲板不動）
           const strokeAngle = isCelebrating ? Math.sin(simState.time * 4) * 0.12 : 0;
+
+          // 1. 先繪製擺動中的長櫓木舵
+          ctx.save();
           ctx.rotate(strokeAngle);
 
           ctx.fillStyle = theme.rudderMain;
@@ -3003,64 +3006,67 @@
           ctx.moveTo(29, -41);
           ctx.lineTo(47, -29);
           ctx.stroke();
+          ctx.restore();
 
-          // 船尾掌舵船夫（穩穩站在船尾甲板上，雙手握住舵柄末端搖櫓前行）
-          ctx.save();
-          const rowLean = isCelebrating ? Math.sin(simState.time * 4) * 0.1 : 0;
-          ctx.translate(52, -32);
-          ctx.rotate(rowLean);
+          // 2. 船尾掌舵船夫：身體與雙腳完全穩站在船尾甲板上不動，僅雙手隨舵柄末端上下擺動握持
+          const cosA = Math.cos(strokeAngle);
+          const sinA = Math.sin(strokeAngle);
+          // 計算舵柄握把點 (42, -39) 旋轉後的即時座標
+          const handleX = 42 * cosA - (-39) * sinA;
+          const handleY = 42 * sinA + (-39) * cosA;
 
-          // 船夫雙腳穩站船尾甲板（前後弓箭步站姿，絕不跨騎舵桿）
+          const helmsmanX = 56;
+          const helmsmanY = -30;
+
+          // 雙腳穩穩站在船尾甲板（完全不隨舵桿上下晃動）
           ctx.strokeStyle = '#1e293b';
           ctx.lineWidth = 3.2;
           ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.moveTo(-1, 8);
-          ctx.lineTo(-6, 22);
-          ctx.moveTo(2, 8);
-          ctx.lineTo(7, 22);
+          ctx.moveTo(helmsmanX - 1, helmsmanY + 8);
+          ctx.lineTo(helmsmanX - 6, helmsmanY + 22);
+          ctx.moveTo(helmsmanX + 2, helmsmanY + 8);
+          ctx.lineTo(helmsmanX + 7, helmsmanY + 22);
           ctx.stroke();
 
-          // 青布短衫身軀
+          // 青布短衫身軀（穩重站立不動）
           ctx.fillStyle = '#1e3a5f';
           ctx.strokeStyle = '#0f172a';
           ctx.lineWidth = 1.4;
           ctx.beginPath();
-          ctx.moveTo(-6, -6);
-          ctx.lineTo(6, -6);
-          ctx.lineTo(5, 8);
-          ctx.lineTo(-5, 8);
+          ctx.moveTo(helmsmanX - 6, helmsmanY - 6);
+          ctx.lineTo(helmsmanX + 6, helmsmanY - 6);
+          ctx.lineTo(helmsmanX + 5, helmsmanY + 8);
+          ctx.lineTo(helmsmanX - 5, helmsmanY + 8);
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
 
-          // 頭部與竹編斗笠
+          // 頭部與竹編斗笠（保持水平穩定）
           ctx.fillStyle = '#f5d0a9';
           ctx.beginPath();
-          ctx.arc(0, -11, 4.2, 0, Math.PI * 2);
+          ctx.arc(helmsmanX, helmsmanY - 11, 4.2, 0, Math.PI * 2);
           ctx.fill();
 
           ctx.fillStyle = '#d97706';
           ctx.strokeStyle = '#78350f';
           ctx.lineWidth = 1.2;
           ctx.beginPath();
-          ctx.moveTo(-10, -13);
-          ctx.quadraticCurveTo(0, -20, 10, -13);
+          ctx.moveTo(helmsmanX - 10, helmsmanY - 13);
+          ctx.quadraticCurveTo(helmsmanX, helmsmanY - 20, helmsmanX + 10, helmsmanY - 13);
           ctx.closePath();
           ctx.fill();
           ctx.stroke();
 
-          // 雙臂向前方舵柄伸出緊握搖櫓
+          // 只有雙臂會跟著舵柄握把 (handleX, handleY) 上下搖櫓擺動
           ctx.strokeStyle = '#1e3a5f';
           ctx.lineWidth = 2.8;
           ctx.beginPath();
-          ctx.moveTo(-4, -3);
-          ctx.lineTo(-14, -6);
-          ctx.moveTo(-3, 0);
-          ctx.lineTo(-12, -3);
+          ctx.moveTo(helmsmanX - 4, helmsmanY - 3);
+          ctx.lineTo(handleX, handleY);
+          ctx.moveTo(helmsmanX - 3, helmsmanY + 1);
+          ctx.lineTo(handleX + 2, handleY + 3);
           ctx.stroke();
-
-          ctx.restore();
         } else if (partId === 'decoy') {
           // 五套寫實古風干擾物
           if (theme.decoyType === 'rockery') {
